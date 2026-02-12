@@ -21,7 +21,7 @@ export function RatingCard({ rating, showPlace = true, showUser = false }: Ratin
         <img
           src={rating.photoUrl}
           alt="Coffee"
-          className="w-full h-48 object-cover"
+          className="w-full max-h-96 object-cover"
         />
       )}
       <div className="p-4">
