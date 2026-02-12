@@ -30,6 +30,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # lightningcss uses platform-specific optional deps that aren't resolved
+      # in the lockfile when it was generated on a different OS (e.g. macOS).
+      # This ensures the Linux binary is available for the Vite build.
+      - name: Install missing platform-specific binaries
+        run: |
+          LC_VERSION=$(node -e "console.log(require('./node_modules/lightningcss/package.json').version)")
+          npm install --no-save "lightningcss-linux-x64-gnu@${LC_VERSION}"
+
       - name: Lint frontend
         run: npm run lint --workspace=frontend
 
