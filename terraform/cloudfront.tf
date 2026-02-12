@@ -5,6 +5,32 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
   signing_protocol                  = "sigv4"
 }
 
+resource "aws_cloudfront_origin_access_control" "photos" {
+  name                              = "${local.project_name}-photos-oac"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+resource "aws_cloudfront_function" "spa_rewrite" {
+  name    = "${local.project_name}-spa-rewrite"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = <<-EOF
+    function handler(event) {
+      var request = event.request;
+      var uri = request.uri;
+      // If the URI has a file extension, serve it as-is (static asset)
+      if (uri.includes('.')) {
+        return request;
+      }
+      // Otherwise rewrite to index.html for SPA client-side routing
+      request.uri = '/index.html';
+      return request;
+    }
+  EOF
+}
+
 resource "aws_cloudfront_distribution" "main" {
   enabled             = true
   default_root_object = "index.html"
@@ -15,6 +41,13 @@ resource "aws_cloudfront_distribution" "main" {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
     origin_id                = "s3-frontend"
     origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
+  }
+
+  # S3 origin for photos
+  origin {
+    domain_name              = aws_s3_bucket.photos.bucket_regional_domain_name
+    origin_id                = "s3-photos"
+    origin_access_control_id = aws_cloudfront_origin_access_control.photos.id
   }
 
   # API Gateway origin
@@ -48,6 +81,11 @@ resource "aws_cloudfront_distribution" "main" {
     min_ttl     = 0
     default_ttl = 86400
     max_ttl     = 31536000
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.spa_rewrite.arn
+    }
   }
 
   # /api/* — proxy to API Gateway, no caching
@@ -72,19 +110,25 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
-  # SPA routing: return index.html for 403/404
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
+  # /uploads/* — serve photos from S3, cached
+  ordered_cache_behavior {
+    path_pattern           = "/uploads/*"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "s3-photos"
+    viewer_protocol_policy = "redirect-to-https"
+    compress               = true
 
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+
+    min_ttl     = 0
+    default_ttl = 86400
+    max_ttl     = 31536000
   }
 
   restrictions {

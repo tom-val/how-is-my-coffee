@@ -25,8 +25,10 @@ export async function getPresignedUploadUrl(key: string, contentType: string): P
 }
 
 export function getPhotoUrl(key: string): string {
+  // Local dev: return direct MinIO URL
   if (process.env.S3_ENDPOINT) {
     return `${process.env.S3_ENDPOINT}/${BUCKET}/${key}`;
   }
-  return `https://${BUCKET}.s3.amazonaws.com/${key}`;
+  // Production: return relative path served via CloudFront /uploads/* behaviour
+  return `/${key}`;
 }
