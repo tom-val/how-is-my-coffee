@@ -22,7 +22,7 @@ export function MyRatingsPage() {
   });
 
   const ratings = useMemo(
-    () => data?.pages.flatMap((p) => p.ratings) ?? [],
+    () => data?.pages.flatMap((p) => p.ratings ?? []) ?? [],
     [data]
   );
 

@@ -36,7 +36,7 @@ export function PlaceDetailPage() {
   });
 
   const ratings = useMemo(
-    () => ratingsData?.pages.flatMap((p) => p.ratings) ?? [],
+    () => ratingsData?.pages.flatMap((p) => p.ratings ?? []) ?? [],
     [ratingsData]
   );
 
