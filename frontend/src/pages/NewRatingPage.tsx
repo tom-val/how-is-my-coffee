@@ -1,8 +1,8 @@
-import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { StarRating } from '../components/StarRating';
 
@@ -59,7 +59,10 @@ export function NewRatingPage() {
   useEffect(() => {
     if (!effectiveLat || !effectiveLng || addressFromUser) return;
     let cancelled = false;
-    setAddressLoading(true);
+    // Start async geocoding — loading state is set in the microtask to avoid synchronous setState in effect
+    Promise.resolve().then(() => {
+      if (!cancelled) setAddressLoading(true);
+    });
     reverseGeocode(effectiveLat, effectiveLng).then((result) => {
       if (cancelled) return;
       setAddressLoading(false);

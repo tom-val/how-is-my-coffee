@@ -47,204 +47,92 @@ All seed users have the password `coffee123`.
 
 ## Deployment to AWS
 
-The app is designed for a serverless AWS deployment. Each backend handler is a standalone Lambda function, the frontend is a static SPA, and all data lives in DynamoDB + S3.
+Infrastructure is managed with **Terraform** and deployed via **GitHub Actions**. No local Terraform installation is needed.
 
-### Architecture Overview
+### Architecture
 
 ```
                    CloudFront (CDN)
                    /              \
-          S3 Bucket (SPA)    API Gateway / Lambda Function URLs
+          S3 Bucket (SPA)    API Gateway HTTP API
                                |
-                          Lambda Functions (one per handler)
+                          Lambda Functions (12 handlers)
                                |
                     DynamoDB          S3 (photos)
 ```
 
-### Step 1: Create AWS Resources
+### Bootstrap (One-Time Setup)
 
-#### DynamoDB Table
+Three steps are required before the first deployment. Everything else is managed by Terraform in the CD pipeline.
 
-```bash
-aws dynamodb create-table \
-  --table-name CoffeeApp \
-  --attribute-definitions \
-    AttributeName=PK,AttributeType=S \
-    AttributeName=SK,AttributeType=S \
-  --key-schema \
-    AttributeName=PK,KeyType=HASH \
-    AttributeName=SK,KeyType=RANGE \
-  --billing-mode PAY_PER_REQUEST \
-  --region us-east-1
-```
-
-#### S3 Bucket for Photos
+**1. Create Terraform state backend**
 
 ```bash
-# Create bucket
-aws s3 mb s3://your-coffee-app-photos --region us-east-1
-
-# Set CORS policy for presigned uploads
-aws s3api put-bucket-cors --bucket your-coffee-app-photos --cors-configuration '{
-  "CORSRules": [
-    {
-      "AllowedOrigins": ["https://your-domain.com"],
-      "AllowedMethods": ["GET", "PUT"],
-      "AllowedHeaders": ["*"],
-      "MaxAgeSeconds": 3600
-    }
-  ]
-}'
+aws s3api create-bucket --bucket coffee-app-terraform-state --region eu-west-1 \
+  --create-bucket-configuration LocationConstraint=eu-west-1
+aws s3api put-bucket-versioning --bucket coffee-app-terraform-state \
+  --versioning-configuration Status=Enabled
+aws dynamodb create-table --table-name coffee-app-terraform-locks \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST --region eu-west-1
 ```
 
-### Step 2: Deploy Lambda Functions
+**2. Create IAM role for GitHub Actions**
 
-Each file in `backend/src/handlers/` exports a `handler` function compatible with AWS Lambda Function URLs (APIGatewayProxyEventV2 signature).
+In the AWS Console: IAM > Roles > Create role > Web identity
 
-| Handler | Method | Path | Description |
-|---|---|---|---|
-| `createUser.ts` | POST | `/api/users` | Register a new user |
-| `loginUser.ts` | POST | `/api/auth/login` | Login with username/password |
-| `getUser.ts` | GET | `/api/users/:username` | Get user by username |
-| `createRating.ts` | POST | `/api/ratings` | Create a coffee rating |
-| `getUserRatings.ts` | GET | `/api/users/:userId/ratings` | Get paginated user ratings |
-| `getPlaceRatings.ts` | GET | `/api/places/:placeId/ratings` | Get paginated place ratings |
-| `getPlaces.ts` | GET | `/api/users/:userId/places` | Get places visited by user |
-| `getPlace.ts` | GET | `/api/places/:placeId` | Get place metadata |
-| `addFriend.ts` | POST | `/api/friends` | Follow a user by username |
-| `getFriends.ts` | GET | `/api/users/:userId/friends` | Get friend list |
-| `getFeed.ts` | GET | `/api/feed` | Get paginated friends feed |
-| `getPresignedUrl.ts` | POST | `/api/photos/upload-url` | Get S3 presigned upload URL |
+| Field | Value |
+|---|---|
+| Identity provider | `token.actions.githubusercontent.com` (select "Create new" if not listed) |
+| Audience | `sts.amazonaws.com` |
+| GitHub organization | `tom-val` |
+| GitHub repository | `how-is-my-coffee` |
+| GitHub branch | `*` (allows both PRs and main) |
 
-#### Build & Bundle
+On the next screen, attach the **`AdministratorAccess`** policy. Name the role **`coffee-app-github-actions`** and create it.
 
-Lambda functions need to be bundled (TypeScript compiled, dependencies included). You can use `esbuild` or `tsup`:
+Note the role ARN (e.g. `arn:aws:iam::123456789012:role/coffee-app-github-actions`).
+
+**3. Configure GitHub repository**
+
+In the repo settings (Settings > Secrets and variables > Actions):
+
+| Type | Name | Value |
+|---|---|---|
+| Secret | `AWS_ROLE_ARN` | Role ARN from step 2 |
+| Variable | `AWS_REGION` | `eu-west-1` |
+| Variable | `AWS_ACCOUNT_ID` | Your AWS account ID |
+
+After this, push the code to `main` and the CD workflow will create all AWS resources automatically.
+
+### CI/CD Pipelines
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| **CI** (`.github/workflows/ci.yml`) | Pull request to `main` | Lint, type-check, build frontend + Lambda handlers, `terraform plan` |
+| **CD** (`.github/workflows/cd.yml`) | Push to `main` | Build everything, `terraform apply`, deploy frontend to S3, invalidate CloudFront |
+
+### Terraform-Managed Resources
+
+All resources are defined in the `terraform/` directory:
+
+- **DynamoDB** table (`CoffeeApp`)
+- **S3** buckets (photos with CORS + frontend with OAC)
+- **Lambda** functions (12 handlers, Node.js 20, ESM)
+- **API Gateway** HTTP API with path-based routing
+- **CloudFront** CDN (serves frontend + proxies `/api/*` to API Gateway)
+- **IAM** roles and policies for Lambda execution
+
+### Lambda Build
+
+The `scripts/build-lambdas.sh` script bundles each handler with esbuild:
 
 ```bash
-# Example with esbuild (install: npm i -D esbuild)
-npx esbuild backend/src/handlers/createRating.ts \
-  --bundle --platform=node --target=node20 \
-  --outfile=dist/createRating.js --format=esm --external:@aws-sdk/*
+bash scripts/build-lambdas.sh
 ```
 
-The `@aws-sdk/*` packages are available in the Lambda runtime and don't need bundling.
-
-#### Lambda Environment Variables
-
-Set these environment variables on each Lambda function:
-
-```
-AWS_REGION=us-east-1
-S3_BUCKET=your-coffee-app-photos
-S3_REGION=us-east-1
-```
-
-Note: `DYNAMODB_ENDPOINT` and `S3_ENDPOINT` should **not** be set in production -- the SDK auto-discovers real AWS endpoints.
-
-#### IAM Role Permissions
-
-Each Lambda needs a role with:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "dynamodb:PutItem",
-        "dynamodb:GetItem",
-        "dynamodb:Query",
-        "dynamodb:UpdateItem"
-      ],
-      "Resource": "arn:aws:dynamodb:us-east-1:ACCOUNT_ID:table/CoffeeApp"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:GetObject"
-      ],
-      "Resource": "arn:aws:s3:::your-coffee-app-photos/*"
-    }
-  ]
-}
-```
-
-### Step 3: Set Up API Gateway or Lambda Function URLs
-
-**Option A: Lambda Function URLs** (simpler)
-
-Enable Function URLs on each Lambda with `AUTH_TYPE=NONE` (the app handles auth via `x-user-id` header). You'll need a CloudFront distribution to route paths to the correct functions.
-
-**Option B: API Gateway HTTP API** (recommended)
-
-Create an HTTP API in API Gateway and configure routes to match the table above. This gives you a single API endpoint with path-based routing.
-
-```bash
-# Example: create HTTP API
-aws apigatewayv2 create-api \
-  --name coffee-app-api \
-  --protocol-type HTTP
-```
-
-Then add Lambda integrations for each route.
-
-### Step 4: Build & Deploy Frontend
-
-```bash
-# Build the frontend
-cd frontend
-VITE_API_URL=https://your-api-domain.com/api npm run build
-```
-
-This produces a `dist/` folder with static files. The `VITE_API_URL` variable tells the frontend where the API lives (in local dev it defaults to `/api` and the Vite proxy forwards to the backend).
-
-#### Host on S3 + CloudFront
-
-```bash
-# Create S3 bucket for hosting
-aws s3 mb s3://your-coffee-app-frontend
-
-# Upload build output
-aws s3 sync frontend/dist/ s3://your-coffee-app-frontend/ --delete
-
-# Enable static website hosting
-aws s3 website s3://your-coffee-app-frontend/ \
-  --index-document index.html \
-  --error-document index.html
-```
-
-Create a CloudFront distribution pointing to the S3 bucket. Set the error page to `index.html` with status 200 (required for SPA client-side routing).
-
-#### Alternative: Vercel / Netlify
-
-You can also deploy the frontend to Vercel or Netlify. Set the build command to `cd frontend && npm run build`, output directory to `frontend/dist`, and add the `VITE_API_URL` environment variable.
-
-Add a redirect rule for SPA routing:
-```
-/*    /index.html   200
-```
-
-### Step 5: CORS Configuration
-
-If the API and frontend are on different domains, ensure your API Gateway or Lambda responses include CORS headers:
-
-```
-Access-Control-Allow-Origin: https://your-domain.com
-Access-Control-Allow-Headers: Content-Type, x-user-id
-Access-Control-Allow-Methods: GET, POST, OPTIONS
-```
-
-The backend `response.ts` helper already includes CORS headers with `*` origin. For production, restrict this to your actual domain.
-
-### Infrastructure as Code (Optional)
-
-For a more reproducible deployment, consider using:
-
-- **AWS SAM** (`template.yaml`) -- native Lambda/API Gateway support
-- **AWS CDK** -- TypeScript-based infrastructure
-- **Terraform** -- provider-agnostic IaC
+This produces `dist/lambdas/<handler>.zip` files consumed by Terraform.
 
 ## Environment Variables
 
@@ -256,23 +144,13 @@ S3_ENDPOINT=http://localhost:9000
 S3_BUCKET=coffee-app-photos
 S3_ACCESS_KEY=minioadmin
 S3_SECRET_KEY=minioadmin
-S3_REGION=us-east-1
-AWS_REGION=us-east-1
+S3_REGION=eu-west-1
+AWS_REGION=eu-west-1
 ```
 
-### Production (Lambda)
+### Production
 
-```env
-AWS_REGION=us-east-1
-S3_BUCKET=your-coffee-app-photos
-S3_REGION=us-east-1
-```
-
-### Frontend Build
-
-```env
-VITE_API_URL=https://your-api-domain.com/api
-```
+Lambda environment variables are set automatically by Terraform (`S3_BUCKET`, `S3_REGION`). `DYNAMODB_ENDPOINT` and `S3_ENDPOINT` are not set in production -- the AWS SDK auto-discovers endpoints.
 
 ## Project Structure
 
@@ -281,6 +159,23 @@ coffee-app/
 ├── package.json              # Monorepo root (npm workspaces)
 ├── docker-compose.yml        # DynamoDB Local + MinIO
 ├── .env                      # Environment variables (local)
+│
+├── .github/workflows/        # GitHub Actions CI/CD
+│   ├── ci.yml                # PR checks: lint, type-check, build, terraform plan
+│   └── cd.yml                # Deploy: build, terraform apply, S3 sync, CloudFront invalidation
+│
+├── terraform/                # Infrastructure as code
+│   ├── main.tf               # Provider, backend, handler map
+│   ├── dynamodb.tf           # DynamoDB table
+│   ├── s3.tf                 # S3 buckets (photos + frontend)
+│   ├── lambda.tf             # Lambda functions + IAM
+│   ├── api-gateway.tf        # HTTP API + routes
+│   ├── cloudfront.tf         # CDN distribution
+│   ├── variables.tf          # Input variables
+│   └── outputs.tf            # Deployment outputs
+│
+├── scripts/
+│   └── build-lambdas.sh      # Bundle Lambda handlers with esbuild
 │
 ├── frontend/                 # React + Vite + TypeScript + TailwindCSS
 │   ├── src/
@@ -294,7 +189,7 @@ coffee-app/
 ├── backend/                  # Lambda handlers + Express local server
 │   ├── local-server.ts       # Express adapter for local development
 │   ├── src/
-│   │   ├── handlers/         # Lambda function handlers
+│   │   ├── handlers/         # Lambda function handlers (12 handlers)
 │   │   └── lib/              # DynamoDB, S3, response, auth, pagination helpers
 │   └── scripts/
 │       ├── create-tables.ts  # DynamoDB table creation
@@ -393,3 +288,5 @@ Requests are authenticated via the `x-user-id` header containing the user's UUID
 | Storage | S3 / MinIO (presigned URL uploads) |
 | Auth | scrypt password hashing, x-user-id header |
 | Validation | Zod |
+| Infrastructure | Terraform (DynamoDB, S3, Lambda, API Gateway, CloudFront) |
+| CI/CD | GitHub Actions (OIDC auth to AWS) |

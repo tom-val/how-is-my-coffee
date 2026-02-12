@@ -1,21 +1,14 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { api, setUserId, getUserId } from '../api/client';
 import type { User } from '../types';
+import { AuthContext } from './authState';
 
-interface AuthState {
-  user: User | null;
-  isLoggedIn: boolean;
-  loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, displayName: string, password: string) => Promise<void>;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthState | null>(null);
+// Determine initial loading state: only true when there are saved credentials to verify
+const hasSavedSession = !!(getUserId() && localStorage.getItem('username'));
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(hasSavedSession);
 
   useEffect(() => {
     const savedUserId = getUserId();
@@ -28,8 +21,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem('username');
         })
         .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
     }
   }, []);
 
@@ -58,10 +49,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
-  return ctx;
 }
