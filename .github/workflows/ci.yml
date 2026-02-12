@@ -41,6 +41,9 @@ jobs:
         run: npx tsc --noEmit
         working-directory: backend
 
+      - name: Test backend
+        run: npm run test --workspace=backend
+
       - name: Build frontend
         run: npm run build --workspace=frontend
 
