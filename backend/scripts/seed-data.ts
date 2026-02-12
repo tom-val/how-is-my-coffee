@@ -24,14 +24,14 @@ const items = [
   // User 1
   {
     PK: `USER#${userId1}`, SK: 'PROFILE',
-    userId: userId1, username: 'tomas', displayName: 'Tomas', passwordHash: seedPasswordHash, createdAt: '2025-01-01T00:00:00.000Z', entityType: 'User',
+    userId: userId1, username: 'tomas', displayName: 'Tomas', passwordHash: seedPasswordHash, totalCaffeineMg: 323, createdAt: '2025-01-01T00:00:00.000Z', entityType: 'User',
   },
   { PK: 'USERNAME#tomas', SK: 'USERNAME', userId: userId1, entityType: 'UsernameIndex' },
 
   // User 2
   {
     PK: `USER#${userId2}`, SK: 'PROFILE',
-    userId: userId2, username: 'coffee_lover', displayName: 'Coffee Lover', passwordHash: seedPasswordHash, createdAt: '2025-01-02T00:00:00.000Z', entityType: 'User',
+    userId: userId2, username: 'coffee_lover', displayName: 'Coffee Lover', passwordHash: seedPasswordHash, totalCaffeineMg: 130, createdAt: '2025-01-02T00:00:00.000Z', entityType: 'User',
   },
   { PK: 'USERNAME#coffee_lover', SK: 'USERNAME', userId: userId2, entityType: 'UsernameIndex' },
 
@@ -46,19 +46,19 @@ const items = [
   {
     PK: `USER#${userId1}`, SK: 'RATING#2025-01-10T09:00:00.000Z#r1',
     ratingId: 'r1', userId: userId1, placeId: 'place_cafe_nero', placeName: 'Caffe Nero',
-    stars: 4.5, drinkName: 'Flat White', description: 'Excellent flat white, smooth and creamy', lat: 54.6872, lng: 25.2797,
+    stars: 4.5, drinkName: 'Flat White', description: 'Excellent flat white, smooth and creamy', caffeineMg: 130, lat: 54.6872, lng: 25.2797,
     createdAt: '2025-01-10T09:00:00.000Z', entityType: 'Rating',
   },
   {
     PK: `USER#${userId1}`, SK: 'RATING#2025-01-15T10:30:00.000Z#r2',
     ratingId: 'r2', userId: userId1, placeId: 'place_vero_cafe', placeName: 'Vero Cafe',
-    stars: 3.5, drinkName: 'Cappuccino', description: 'Good cappuccino but a bit lukewarm', lat: 54.6892, lng: 25.2800,
+    stars: 3.5, drinkName: 'Cappuccino', description: 'Good cappuccino but a bit lukewarm', caffeineMg: 130, lat: 54.6892, lng: 25.2800,
     createdAt: '2025-01-15T10:30:00.000Z', entityType: 'Rating',
   },
   {
     PK: `USER#${userId1}`, SK: 'RATING#2025-02-01T08:00:00.000Z#r3',
     ratingId: 'r3', userId: userId1, placeId: 'place_cafe_nero', placeName: 'Caffe Nero',
-    stars: 5, drinkName: 'Espresso', description: 'The best espresso I have ever had!', lat: 54.6872, lng: 25.2797,
+    stars: 5, drinkName: 'Espresso', description: 'The best espresso I have ever had!', caffeineMg: 63, lat: 54.6872, lng: 25.2797,
     createdAt: '2025-02-01T08:00:00.000Z', entityType: 'Rating',
   },
 
@@ -66,19 +66,19 @@ const items = [
   {
     PK: 'PLACE#place_cafe_nero', SK: 'RATING#2025-01-10T09:00:00.000Z#r1',
     ratingId: 'r1', userId: userId1, username: 'tomas', stars: 4.5,
-    drinkName: 'Flat White', description: 'Excellent flat white, smooth and creamy',
+    drinkName: 'Flat White', description: 'Excellent flat white, smooth and creamy', caffeineMg: 130,
     createdAt: '2025-01-10T09:00:00.000Z', entityType: 'PlaceRating',
   },
   {
     PK: 'PLACE#place_cafe_nero', SK: 'RATING#2025-02-01T08:00:00.000Z#r3',
     ratingId: 'r3', userId: userId1, username: 'tomas', stars: 5,
-    drinkName: 'Espresso', description: 'The best espresso I have ever had!',
+    drinkName: 'Espresso', description: 'The best espresso I have ever had!', caffeineMg: 63,
     createdAt: '2025-02-01T08:00:00.000Z', entityType: 'PlaceRating',
   },
   {
     PK: 'PLACE#place_vero_cafe', SK: 'RATING#2025-01-15T10:30:00.000Z#r2',
     ratingId: 'r2', userId: userId1, username: 'tomas', stars: 3.5,
-    drinkName: 'Cappuccino', description: 'Good cappuccino but a bit lukewarm',
+    drinkName: 'Cappuccino', description: 'Good cappuccino but a bit lukewarm', caffeineMg: 130,
     createdAt: '2025-01-15T10:30:00.000Z', entityType: 'PlaceRating',
   },
 
@@ -112,13 +112,13 @@ const items = [
   {
     PK: `USER#${userId2}`, SK: 'RATING#2025-01-20T14:00:00.000Z#r4',
     ratingId: 'r4', userId: userId2, placeId: 'place_cafe_nero', placeName: 'Caffe Nero',
-    stars: 4, drinkName: 'Latte', description: 'Solid coffee, nice atmosphere', lat: 54.6872, lng: 25.2797,
+    stars: 4, drinkName: 'Latte', description: 'Solid coffee, nice atmosphere', caffeineMg: 130, lat: 54.6872, lng: 25.2797,
     createdAt: '2025-01-20T14:00:00.000Z', entityType: 'Rating',
   },
   {
     PK: 'PLACE#place_cafe_nero', SK: 'RATING#2025-01-20T14:00:00.000Z#r4',
     ratingId: 'r4', userId: userId2, username: 'coffee_lover', stars: 4,
-    drinkName: 'Latte', description: 'Solid coffee, nice atmosphere',
+    drinkName: 'Latte', description: 'Solid coffee, nice atmosphere', caffeineMg: 130,
     createdAt: '2025-01-20T14:00:00.000Z', entityType: 'PlaceRating',
   },
   {

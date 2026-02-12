@@ -1,4 +1,4 @@
-import type { User, Rating, Place, UserPlace, Friend } from '../types';
+import type { User, Rating, Place, UserPlace, Friend, CaffeineStats } from '../types';
 
 export interface PaginatedRatings {
   ratings: Rating[];
@@ -102,6 +102,11 @@ export const api = {
   },
   getFriends(userId: string) {
     return request<{ friends: Friend[] }>(`/users/${userId}/friends`);
+  },
+
+  // Caffeine
+  getCaffeineStats(userId: string) {
+    return request<CaffeineStats>(`/users/${userId}/caffeine`);
   },
 
   // Feed

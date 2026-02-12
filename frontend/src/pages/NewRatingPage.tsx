@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { StarRating } from '../components/StarRating';
+import { resolveCaffeineMg } from '../lib/caffeine';
 
 async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
   try {
@@ -117,6 +118,7 @@ export function NewRatingPage() {
         queryClient.invalidateQueries({ queryKey: ['feed'] }),
         queryClient.invalidateQueries({ queryKey: ['placeRatings'] }),
         queryClient.invalidateQueries({ queryKey: ['place'] }),
+        queryClient.invalidateQueries({ queryKey: ['caffeineStats'] }),
       ]);
       navigate('/');
     },
@@ -155,7 +157,6 @@ export function NewRatingPage() {
             ref={fileRef}
             type="file"
             accept="image/*"
-            capture="environment"
             onChange={handlePhotoSelect}
             className="hidden"
           />
@@ -268,6 +269,13 @@ export function NewRatingPage() {
             placeholder="e.g. flat white, espresso, cappuccino"
             autoComplete="off"
           />
+          {drinkName.trim() && (
+            <p className="text-xs text-stone-400 mt-1">
+              {resolveCaffeineMg(drinkName) > 0
+                ? `☕ ${resolveCaffeineMg(drinkName)} mg caffeine`
+                : '☕ Unknown drink — 0 mg caffeine'}
+            </p>
+          )}
         </div>
 
         {/* Location */}

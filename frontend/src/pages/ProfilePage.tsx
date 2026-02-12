@@ -26,6 +26,12 @@ export function ProfilePage() {
     enabled: !!user,
   });
 
+  const { data: caffeineData } = useQuery({
+    queryKey: ['caffeineStats', user?.userId],
+    queryFn: () => api.getCaffeineStats(user!.userId),
+    enabled: !!user,
+  });
+
   const shareUrl = `${window.location.origin}/u/${user?.username}`;
 
   const handleCopyLink = async () => {
@@ -73,6 +79,25 @@ export function ProfilePage() {
           <div className="text-center">
             <p className="text-lg font-bold text-stone-800">{friendsData?.friends?.length ?? '-'}</p>
             <p className="text-xs text-stone-500">Friends</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Caffeine Stats */}
+      <div className="bg-white rounded-xl p-4 shadow-sm border border-stone-100 mb-4">
+        <h3 className="font-semibold text-stone-800 mb-3">Caffeine</h3>
+        <div className="flex justify-around">
+          <div className="text-center">
+            <p className="text-lg font-bold text-stone-800">
+              {caffeineData ? `${caffeineData.todayMg.toLocaleString()} mg` : '-'}
+            </p>
+            <p className="text-xs text-stone-500">Today</p>
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-bold text-stone-800">
+              {caffeineData ? `${caffeineData.totalMg.toLocaleString()} mg` : '-'}
+            </p>
+            <p className="text-xs text-stone-500">All-time</p>
           </div>
         </div>
       </div>

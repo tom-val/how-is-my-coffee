@@ -15,6 +15,7 @@ export interface Rating {
   description?: string;
   photoKey?: string;
   photoUrl?: string;
+  caffeineMg?: number;
   lat: number;
   lng: number;
   createdAt: string;
@@ -46,4 +47,9 @@ export interface Friend {
   friendUsername: string;
   friendDisplayName: string;
   addedAt: string;
+}
+
+export interface CaffeineStats {
+  todayMg: number;
+  totalMg: number;
 }
