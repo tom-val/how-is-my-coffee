@@ -35,11 +35,17 @@ const items = [
   },
   { PK: 'USERNAME#coffee_lover', SK: 'USERNAME', userId: userId2, entityType: 'UsernameIndex' },
 
-  // Friendship
+  // Friendship (tomas follows coffee_lover)
   {
     PK: `USER#${userId1}`, SK: `FRIEND#${userId2}`,
     friendUserId: userId2, friendUsername: 'coffee_lover', friendDisplayName: 'Coffee Lover',
     addedAt: '2025-01-03T00:00:00.000Z', entityType: 'Friend',
+  },
+  // Reverse follower record (coffee_lover is followed by tomas)
+  {
+    PK: `USER#${userId2}`, SK: `FOLLOWER#${userId1}`,
+    followerUserId: userId1, followerUsername: 'tomas', followerDisplayName: 'Tomas',
+    followedAt: '2025-01-03T00:00:00.000Z', entityType: 'Follower',
   },
 
   // Ratings for User 1

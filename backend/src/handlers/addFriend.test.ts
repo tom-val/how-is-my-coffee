@@ -67,12 +67,16 @@ describe('addFriend handler', () => {
     expect(JSON.parse(result.body as string).error).toBe('Cannot add yourself as a friend');
   });
 
-  it('creates a friend record and returns 201 on success', async () => {
+  it('creates a friend record and reverse follower record on success', async () => {
     // Username lookup
     mockSend.mockResolvedValueOnce({ Item: { userId: 'friend-1' } });
     // Friend profile lookup
     mockSend.mockResolvedValueOnce({ Item: { displayName: 'Friend One' } });
-    // PutCommand succeeds
+    // Current user profile lookup
+    mockSend.mockResolvedValueOnce({ Item: { username: 'currentuser', displayName: 'Current User' } });
+    // PutCommand — FRIEND# record
+    mockSend.mockResolvedValueOnce({});
+    // PutCommand — FOLLOWER# record
     mockSend.mockResolvedValueOnce({});
 
     const result = await handler(
@@ -85,7 +89,22 @@ describe('addFriend handler', () => {
     expect(body.friendUsername).toBe('frienduser'); // lowercased
     expect(body.friendDisplayName).toBe('Friend One');
 
-    // 1 Get (username) + 1 Get (profile) + 1 Put
-    expect(mockSend).toHaveBeenCalledTimes(3);
+    // 1 Get (username) + 1 Get (friend profile) + 1 Get (current user profile) + 2 Puts
+    expect(mockSend).toHaveBeenCalledTimes(5);
+
+    // Verify FRIEND# record
+    const friendPutInput = mockSend.mock.calls[3][0].input;
+    expect(friendPutInput.Item.PK).toBe('USER#user-1');
+    expect(friendPutInput.Item.SK).toBe('FRIEND#friend-1');
+    expect(friendPutInput.Item.entityType).toBe('Friend');
+
+    // Verify reverse FOLLOWER# record
+    const followerPutInput = mockSend.mock.calls[4][0].input;
+    expect(followerPutInput.Item.PK).toBe('USER#friend-1');
+    expect(followerPutInput.Item.SK).toBe('FOLLOWER#user-1');
+    expect(followerPutInput.Item.followerUserId).toBe('user-1');
+    expect(followerPutInput.Item.followerUsername).toBe('currentuser');
+    expect(followerPutInput.Item.followerDisplayName).toBe('Current User');
+    expect(followerPutInput.Item.entityType).toBe('Follower');
   });
 });

@@ -41,6 +41,19 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     );
     const friendDisplayName = (friendProfile.Item?.displayName as string) || friendUsernameLower;
 
+    // Get current user's profile for the reverse follower record
+    const currentUserProfile = await dynamo.send(
+      new GetCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
+      })
+    );
+    const currentUsername = (currentUserProfile.Item?.username as string) || '';
+    const currentDisplayName = (currentUserProfile.Item?.displayName as string) || currentUsername;
+
+    const now = new Date().toISOString();
+
+    // Write FRIEND# record on current user's partition
     await dynamo.send(
       new PutCommand({
         TableName: TABLE_NAME,
@@ -50,8 +63,24 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
           friendUserId,
           friendUsername: friendUsernameLower,
           friendDisplayName,
-          addedAt: new Date().toISOString(),
+          addedAt: now,
           entityType: 'Friend',
+        },
+      })
+    );
+
+    // Write reverse FOLLOWER# record on friend's partition
+    await dynamo.send(
+      new PutCommand({
+        TableName: TABLE_NAME,
+        Item: {
+          PK: `USER#${friendUserId}`,
+          SK: `FOLLOWER#${userId}`,
+          followerUserId: userId,
+          followerUsername: currentUsername,
+          followerDisplayName: currentDisplayName,
+          followedAt: now,
+          entityType: 'Follower',
         },
       })
     );

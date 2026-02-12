@@ -49,6 +49,13 @@ export interface Friend {
   addedAt: string;
 }
 
+export interface Follower {
+  followerUserId: string;
+  followerUsername: string;
+  followerDisplayName: string;
+  followedAt: string;
+}
+
 export interface CaffeineStats {
   todayMg: number;
   totalMg: number;
