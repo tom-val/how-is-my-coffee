@@ -276,7 +276,7 @@ export function NewRatingPage() {
             value={drinkName}
             onChange={(e) => setDrinkName(e.target.value)}
             className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-            placeholder="e.g. flat white, espresso, cappuccino"
+            placeholder="e.g. flat white, cappuccino, green tea, kapučinas"
             autoComplete="off"
           />
           {drinkName.trim() && (
