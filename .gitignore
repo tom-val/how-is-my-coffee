@@ -3,3 +3,8 @@ dist/
 .env
 *.log
 .DS_Store
+
+# Terraform
+terraform/.terraform/
+terraform/terraform.tfstate*
+*.tfvars
