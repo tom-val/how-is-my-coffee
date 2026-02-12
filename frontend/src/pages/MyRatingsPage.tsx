@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { RatingCard } from '../components/RatingCard';
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
 

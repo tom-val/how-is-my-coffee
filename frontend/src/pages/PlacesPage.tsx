@@ -4,8 +4,8 @@ import { Link } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import { api } from '../api/client';
-import { useAuth } from '../context/AuthContext';
-import { StarRating } from '../components/StarRating';
+import { useAuth } from '../hooks/useAuth';
+
 
 // Fix leaflet default marker icon
 const icon = new L.Icon({
