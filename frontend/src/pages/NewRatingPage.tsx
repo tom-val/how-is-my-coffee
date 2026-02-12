@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { StarRating } from '../components/StarRating';
 import { resolveCaffeineMg } from '../lib/caffeine';
+import { resizeImage } from '../lib/resizeImage';
 
 async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
   try {
@@ -127,9 +128,18 @@ export function NewRatingPage() {
     },
   });
 
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+
+    try {
+      const resized = await resizeImage(file);
+      setPhoto(resized);
+      const reader = new FileReader();
+      reader.onload = () => setPhotoPreview(reader.result as string);
+      reader.readAsDataURL(resized);
+    } catch {
+      // Fallback: use original file if resize fails
       setPhoto(file);
       const reader = new FileReader();
       reader.onload = () => setPhotoPreview(reader.result as string);
@@ -162,7 +172,7 @@ export function NewRatingPage() {
           />
           {photoPreview ? (
             <div className="relative">
-              <img src={photoPreview} alt="Preview" className="w-full h-48 object-cover rounded-xl" />
+              <img src={photoPreview} alt="Preview" className="w-full max-h-72 object-cover rounded-xl" />
               <button
                 type="button"
                 onClick={() => { setPhoto(null); setPhotoPreview(null); }}
