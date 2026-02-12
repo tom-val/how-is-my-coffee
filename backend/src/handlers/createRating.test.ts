@@ -95,6 +95,8 @@ describe('createRating handler', () => {
     });
     // UpdateCommand (Place META update)
     mockSend.mockResolvedValueOnce({});
+    // UpdateCommand (caffeine ADD on profile)
+    mockSend.mockResolvedValueOnce({});
 
     const result = await handler(
       makeEvent(validBody, { 'x-user-id': 'user-1' }),
@@ -105,8 +107,18 @@ describe('createRating handler', () => {
     expect(body.ratingId).toBe('rating-uuid-001');
     expect(body.createdAt).toBeDefined();
 
-    // Profile + Transact + Upsert + Query + META update
-    expect(mockSend).toHaveBeenCalledTimes(5);
+    // Profile + Transact + Upsert + Query + META update + caffeine ADD
+    expect(mockSend).toHaveBeenCalledTimes(6);
+
+    // Verify caffeineMg stored on the user rating item
+    const transactCall = mockSend.mock.calls[1][0];
+    const userRatingItem = transactCall.input.TransactItems[0].Put.Item;
+    expect(userRatingItem.caffeineMg).toBe(130); // "Flat White" → 130 mg
+
+    // Verify caffeine ADD on profile
+    const caffeineAddCall = mockSend.mock.calls[5][0];
+    expect(caffeineAddCall.input.UpdateExpression).toBe('ADD totalCaffeineMg :mg');
+    expect(caffeineAddCall.input.ExpressionAttributeValues[':mg']).toBe(130);
   });
 
   it('computes average rating using only latest rating per user', async () => {
@@ -122,6 +134,8 @@ describe('createRating handler', () => {
       ],
     });
     mockSend.mockResolvedValueOnce({});
+    // Caffeine ADD
+    mockSend.mockResolvedValueOnce({});
 
     const result = await handler(
       makeEvent(validBody, { 'x-user-id': 'user-1' }),
@@ -133,5 +147,32 @@ describe('createRating handler', () => {
     const metaUpdateCall = mockSend.mock.calls[4][0];
     expect(metaUpdateCall.input.ExpressionAttributeValues[':avg']).toBe(4);
     expect(metaUpdateCall.input.ExpressionAttributeValues[':cnt']).toBe(2);
+  });
+
+  it('stores 0 caffeineMg for an unrecognised drink name', async () => {
+    mockSend.mockResolvedValueOnce({ Item: { username: 'testuser' } });
+    mockSend.mockResolvedValueOnce({});
+    mockSend.mockResolvedValueOnce({});
+    mockSend.mockResolvedValueOnce({ Items: [{ userId: 'user-1', stars: 4 }] });
+    mockSend.mockResolvedValueOnce({});
+    mockSend.mockResolvedValueOnce({});
+
+    const result = await handler(
+      makeEvent(
+        { ...validBody, drinkName: 'Mystery Beverage' },
+        { 'x-user-id': 'user-1' },
+      ),
+    );
+
+    expect(result.statusCode).toBe(201);
+
+    // Verify caffeineMg is 0 on the rating item
+    const transactCall = mockSend.mock.calls[1][0];
+    const userRatingItem = transactCall.input.TransactItems[0].Put.Item;
+    expect(userRatingItem.caffeineMg).toBe(0);
+
+    // Caffeine ADD still called with 0
+    const caffeineAddCall = mockSend.mock.calls[5][0];
+    expect(caffeineAddCall.input.ExpressionAttributeValues[':mg']).toBe(0);
   });
 });

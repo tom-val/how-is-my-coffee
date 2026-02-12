@@ -3,6 +3,7 @@ import { TransactWriteCommand, GetCommand, UpdateCommand, QueryCommand } from '@
 import { z } from 'zod';
 import { dynamo, TABLE_NAME } from '../lib/dynamo.js';
 import { created, badRequest, serverError } from '../lib/response.js';
+import { resolveCaffeineMg } from '../lib/caffeine.js';
 
 const CreateRatingSchema = z.object({
   placeId: z.string().min(1),
@@ -28,6 +29,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     const { placeId, placeName, stars, drinkName, description, photoKey, lat, lng, address } = parsed.data;
     const ratingId = crypto.randomUUID();
     const timestamp = new Date().toISOString();
+    const caffeineMg = resolveCaffeineMg(drinkName);
 
     // Get username for denormalized data on place ratings
     const profileResult = await dynamo.send(
@@ -59,6 +61,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
                 lat,
                 lng,
                 address,
+                caffeineMg,
                 createdAt: timestamp,
                 entityType: 'Rating',
               },
@@ -78,6 +81,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
                 description,
                 photoKey,
                 address,
+                caffeineMg,
                 createdAt: timestamp,
                 entityType: 'PlaceRating',
               },
@@ -152,6 +156,16 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
           ':pid': placeId,
           ':et': 'Place',
         },
+      })
+    );
+
+    // Atomically increment totalCaffeineMg on user profile
+    await dynamo.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
+        UpdateExpression: 'ADD totalCaffeineMg :mg',
+        ExpressionAttributeValues: { ':mg': caffeineMg },
       })
     );
 
