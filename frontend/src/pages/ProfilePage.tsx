@@ -9,7 +9,7 @@ export function ProfilePage() {
   const [copied, setCopied] = useState(false);
 
   const { data: ratingsData } = useQuery({
-    queryKey: ['userRatings', user?.userId],
+    queryKey: ['userRatingsCount', user?.userId],
     queryFn: () => api.getUserRatings(user!.userId),
     enabled: !!user,
   });

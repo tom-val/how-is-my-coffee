@@ -112,6 +112,7 @@ export function NewRatingPage() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['userRatings', user?.userId] }),
+        queryClient.invalidateQueries({ queryKey: ['userRatingsCount', user?.userId] }),
         queryClient.invalidateQueries({ queryKey: ['userPlaces', user?.userId] }),
         queryClient.invalidateQueries({ queryKey: ['feed'] }),
         queryClient.invalidateQueries({ queryKey: ['placeRatings'] }),
