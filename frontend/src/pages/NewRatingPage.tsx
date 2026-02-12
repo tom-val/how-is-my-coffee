@@ -157,7 +157,6 @@ export function NewRatingPage() {
             ref={fileRef}
             type="file"
             accept="image/*"
-            capture="environment"
             onChange={handlePhotoSelect}
             className="hidden"
           />
