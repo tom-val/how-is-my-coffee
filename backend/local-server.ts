@@ -12,6 +12,7 @@ import { handler as getPlaces } from './src/handlers/getPlaces.js';
 import { handler as getPlace } from './src/handlers/getPlace.js';
 import { handler as addFriend } from './src/handlers/addFriend.js';
 import { handler as getFriends } from './src/handlers/getFriends.js';
+import { handler as getFollowers } from './src/handlers/getFollowers.js';
 import { handler as getPresignedUrl } from './src/handlers/getPresignedUrl.js';
 import { handler as loginUser } from './src/handlers/loginUser.js';
 import { handler as getFeed } from './src/handlers/getFeed.js';
@@ -66,6 +67,7 @@ app.get('/api/places/:placeId', adapt(getPlace));
 // Friend routes
 app.post('/api/friends', adapt(addFriend));
 app.get('/api/users/:userId/friends', adapt(getFriends));
+app.get('/api/users/:userId/followers', adapt(getFollowers));
 
 // Feed route
 app.get('/api/feed', adapt(getFeed));

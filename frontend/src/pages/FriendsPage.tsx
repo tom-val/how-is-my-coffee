@@ -16,10 +16,17 @@ export function FriendsPage() {
     enabled: !!user,
   });
 
+  const { data: followersData, isLoading: isFollowersLoading } = useQuery({
+    queryKey: ['followers', user?.userId],
+    queryFn: () => api.getFollowers(user!.userId),
+    enabled: !!user,
+  });
+
   const addMutation = useMutation({
     mutationFn: (username: string) => api.addFriend(username),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['friends', user?.userId] });
+      queryClient.invalidateQueries({ queryKey: ['followers', user?.userId] });
       setFriendUsername('');
       setError('');
     },
@@ -29,6 +36,7 @@ export function FriendsPage() {
   });
 
   const friends = data?.friends || [];
+  const followers = followersData?.followers || [];
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,12 +67,16 @@ export function FriendsPage() {
       </form>
       {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
 
-      {/* Friend List */}
+      {/* Following List */}
+      <h2 className="text-sm font-semibold text-stone-500 uppercase tracking-wide mb-3">
+        Following ({friends.length})
+      </h2>
+
       {isLoading && <div className="text-center py-8 text-stone-400">Loading...</div>}
 
       {!isLoading && friends.length === 0 && (
         <div className="text-center py-8">
-          <p className="text-stone-500">No friends yet</p>
+          <p className="text-stone-500">Not following anyone yet</p>
           <p className="text-stone-400 text-sm mt-1">Add a friend by username</p>
         </div>
       )}
@@ -82,6 +94,37 @@ export function FriendsPage() {
             <div>
               <p className="font-semibold text-stone-800">{f.friendDisplayName}</p>
               <p className="text-sm text-stone-500">@{f.friendUsername}</p>
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      {/* Followers List */}
+      <h2 className="text-sm font-semibold text-stone-500 uppercase tracking-wide mb-3 mt-8">
+        Followers ({followers.length})
+      </h2>
+
+      {isFollowersLoading && <div className="text-center py-8 text-stone-400">Loading...</div>}
+
+      {!isFollowersLoading && followers.length === 0 && (
+        <div className="text-center py-8">
+          <p className="text-stone-500">No followers yet</p>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {followers.map((f) => (
+          <Link
+            key={f.followerUserId}
+            to={`/u/${f.followerUsername}`}
+            className="flex items-center gap-3 bg-white rounded-xl p-4 shadow-sm border border-stone-100 hover:shadow-md transition-shadow"
+          >
+            <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center text-stone-600 font-bold">
+              {f.followerDisplayName.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <p className="font-semibold text-stone-800">{f.followerDisplayName}</p>
+              <p className="text-sm text-stone-500">@{f.followerUsername}</p>
             </div>
           </Link>
         ))}
