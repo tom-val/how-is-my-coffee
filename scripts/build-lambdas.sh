@@ -12,6 +12,8 @@ HANDLERS=(
   getPlace
   addFriend
   getFriends
+  getFollowers
+  getCaffeineStats
   getFeed
   getPresignedUrl
 )
