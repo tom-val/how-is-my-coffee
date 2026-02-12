@@ -63,7 +63,7 @@ Infrastructure is managed with **Terraform** and deployed via **GitHub Actions**
 
 ### Bootstrap (One-Time Setup)
 
-Three manual steps are required before the first deployment. Everything else is managed by Terraform in the CD pipeline.
+Three steps are required before the first deployment. Everything else is managed by Terraform in the CD pipeline.
 
 **1. Create Terraform state backend**
 
@@ -80,15 +80,19 @@ aws dynamodb create-table --table-name coffee-app-terraform-locks \
 
 **2. Create IAM role for GitHub Actions**
 
-In the AWS Console (IAM > Roles > Create role):
+In the AWS Console: IAM > Roles > Create role > Web identity
 
-- **Trusted entity**: Web identity > `token.actions.githubusercontent.com` (create the OIDC identity provider first if it doesn't exist: IAM > Identity providers > Add provider)
-- **Audience**: `sts.amazonaws.com`
-- **Condition**: `token.actions.githubusercontent.com:sub` StringLike `repo:tom-val/how-is-my-coffee:*`
-- **Permissions**: `AdministratorAccess`
-- **Role name**: `coffee-app-github-actions`
+| Field | Value |
+|---|---|
+| Identity provider | `token.actions.githubusercontent.com` (select "Create new" if not listed) |
+| Audience | `sts.amazonaws.com` |
+| GitHub organization | `tom-val` |
+| GitHub repository | `how-is-my-coffee` |
+| GitHub branch | `*` (allows both PRs and main) |
 
-Note the role ARN.
+On the next screen, attach the **`AdministratorAccess`** policy. Name the role **`coffee-app-github-actions`** and create it.
+
+Note the role ARN (e.g. `arn:aws:iam::123456789012:role/coffee-app-github-actions`).
 
 **3. Configure GitHub repository**
 
