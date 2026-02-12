@@ -1,0 +1,20 @@
+{
+  "name": "coffee-app",
+  "private": true,
+  "workspaces": ["frontend", "backend"],
+  "scripts": {
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "db:create-tables": "npx tsx backend/scripts/create-tables.ts",
+    "db:seed": "npx tsx backend/scripts/seed-data.ts",
+    "db:seed-large": "npx tsx backend/scripts/seed-large.ts",
+    "dev:backend": "npx tsx watch backend/local-server.ts",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "setup": "npm install && npm run infra:up && sleep 3 && npm run db:create-tables"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "tsx": "^4.19.0"
+  }
+}
