@@ -33,7 +33,7 @@ export async function resolveWithAi(drinkName: string): Promise<number | null> {
             content: `Caffeine in mg for a single serving of "${drinkName}"? Reply ONLY a number. If unknown reply 0.`,
           },
         ],
-        max_tokens: 10,
+        max_completion_tokens: 10,
         temperature: 0,
       }),
       signal: controller.signal,
@@ -42,7 +42,8 @@ export async function resolveWithAi(drinkName: string): Promise<number | null> {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.warn(`[OpenAI] Non-OK response: ${response.status}`);
+      const body = await response.text();
+      console.warn(`[OpenAI] Non-OK response: ${response.status} ${body}`);
       return null;
     }
 

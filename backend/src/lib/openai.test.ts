@@ -50,12 +50,16 @@ describe('resolveWithAi', () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.model).toBe('gpt-5-mini');
     expect(body.temperature).toBe(0);
-    expect(body.max_tokens).toBe(10);
+    expect(body.max_completion_tokens).toBe(10);
     expect(body.messages[1].content).toContain('Americano');
   });
 
   it('returns null on non-OK HTTP response', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 429 });
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      text: () => Promise.resolve('{"error":{"message":"Rate limit exceeded"}}'),
+    });
 
     const result = await resolveWithAi('Espresso');
 
