@@ -1,7 +1,8 @@
-import type { User, Rating, Place, UserPlace, Friend, Follower, CaffeineStats } from '../types';
+import type { User, Rating, Place, UserPlace, Friend, Follower, CaffeineStats, RatingDetail } from '../types';
 
 export interface PaginatedRatings {
   ratings: Rating[];
+  likedRatingIds: string[];
   nextCursor: string | null;
 }
 
@@ -122,6 +123,22 @@ export const api = {
   // Feed
   getFeed(cursor?: string) {
     return request<PaginatedRatings>(withParams('/feed', { cursor }));
+  },
+
+  // Rating detail & interactions
+  getRatingDetail(ratingId: string) {
+    return request<RatingDetail>(`/ratings/${ratingId}`);
+  },
+  toggleLike(ratingId: string) {
+    return request<{ liked: boolean; likeCount: number }>(`/ratings/${ratingId}/like`, {
+      method: 'POST',
+    });
+  },
+  createComment(ratingId: string, text: string) {
+    return request<{ commentId: string; createdAt: string }>(`/ratings/${ratingId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    });
   },
 
   // Photos

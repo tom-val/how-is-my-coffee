@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
 import { RatingCard } from '../components/RatingCard';
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
+import { useToggleLike } from '../hooks/useToggleLike';
 
 export function MyRatingsPage() {
   const { user } = useAuth();
@@ -26,6 +27,16 @@ export function MyRatingsPage() {
     [data]
   );
 
+  const likedRatingIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const page of data?.pages ?? []) {
+      for (const id of page.likedRatingIds ?? []) ids.add(id);
+    }
+    return ids;
+  }, [data]);
+
+  const { toggleLike } = useToggleLike([['userRatings', user?.userId]]);
+
   const handleLoadMore = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) fetchNextPage();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
@@ -47,7 +58,12 @@ export function MyRatingsPage() {
 
       <div className="space-y-4">
         {ratings.map((r) => (
-          <RatingCard key={r.ratingId} rating={r} />
+          <RatingCard
+            key={r.ratingId}
+            rating={r}
+            isLikedByMe={likedRatingIds.has(r.ratingId)}
+            onToggleLike={toggleLike}
+          />
         ))}
       </div>
 

@@ -155,21 +155,34 @@ for (const [fromIdx, toIdx] of friendships) {
   });
 }
 
-// 3. Ratings (USER# copy + PLACE# copy)
+// 3. Ratings (USER# copy + PLACE# copy + RATING#/META copy)
 for (const r of ratings) {
   // USER# copy
   items.push({
     PK: `USER#${r.userId}`, SK: `RATING#${r.createdAt}#${r.ratingId}`,
-    ratingId: r.ratingId, userId: r.userId, placeId: r.placeId, placeName: r.placeName,
+    ratingId: r.ratingId, userId: r.userId, username: r.username,
+    placeId: r.placeId, placeName: r.placeName,
     stars: r.stars, drinkName: r.drinkName, description: r.description,
-    lat: r.lat, lng: r.lng, createdAt: r.createdAt, entityType: 'Rating',
+    lat: r.lat, lng: r.lng, createdAt: r.createdAt,
+    likeCount: 0, commentCount: 0, entityType: 'Rating',
   });
   // PLACE# copy
   items.push({
     PK: `PLACE#${r.placeId}`, SK: `RATING#${r.createdAt}#${r.ratingId}`,
     ratingId: r.ratingId, userId: r.userId, username: r.username, stars: r.stars,
     drinkName: r.drinkName, description: r.description,
-    createdAt: r.createdAt, entityType: 'PlaceRating',
+    placeId: r.placeId, placeName: r.placeName,
+    createdAt: r.createdAt, likeCount: 0, commentCount: 0,
+    entityType: 'PlaceRating',
+  });
+  // RATING# META copy (co-locates likes + comments)
+  items.push({
+    PK: `RATING#${r.ratingId}`, SK: 'META',
+    ratingId: r.ratingId, userId: r.userId, username: r.username,
+    placeId: r.placeId, placeName: r.placeName,
+    stars: r.stars, drinkName: r.drinkName, description: r.description,
+    lat: r.lat, lng: r.lng, createdAt: r.createdAt,
+    likeCount: 0, commentCount: 0, entityType: 'RatingMeta',
   });
 }
 

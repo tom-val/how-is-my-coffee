@@ -3,6 +3,7 @@ import { QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamo, TABLE_NAME } from '../lib/dynamo.js';
 import { ok, badRequest, serverError } from '../lib/response.js';
 import { getPhotoUrl } from '../lib/s3.js';
+import { getLikedRatingIds } from '../lib/likes.js';
 
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 50;
@@ -34,7 +35,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
 
     const friends = friendsResult.Items || [];
     if (friends.length === 0) {
-      return ok({ ratings: [], nextCursor: null });
+      return ok({ ratings: [], likedRatingIds: [], nextCursor: null });
     }
 
     // 2. Fetch each friend's ratings in parallel
@@ -93,7 +94,10 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       ? page[page.length - 1].createdAt as string
       : null;
 
-    return ok({ ratings: page, nextCursor });
+    const ratingIds = page.map((r) => r.ratingId as string).filter(Boolean);
+    const likedRatingIds = await getLikedRatingIds(ratingIds, userId);
+
+    return ok({ ratings: page, likedRatingIds, nextCursor });
   } catch (err) {
     return serverError(err);
   }

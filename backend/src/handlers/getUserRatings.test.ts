@@ -12,6 +12,11 @@ vi.mock('../lib/s3.js', () => ({
   getPhotoUrl: vi.fn((key: string) => `/mocked/${key}`),
 }));
 
+const mockGetLikedRatingIds = vi.fn();
+vi.mock('../lib/likes.js', () => ({
+  getLikedRatingIds: (...args: unknown[]) => mockGetLikedRatingIds(...args),
+}));
+
 import { handler as rawHandler } from './getUserRatings.js';
 
 type Result = APIGatewayProxyStructuredResultV2;
@@ -23,10 +28,11 @@ async function handler(event: APIGatewayProxyEventV2): Promise<Result> {
 function makeEvent(
   pathParameters?: Record<string, string>,
   queryStringParameters?: Record<string, string>,
+  headers: Record<string, string> = {},
 ): APIGatewayProxyEventV2 {
   return {
     body: null,
-    headers: {},
+    headers,
     pathParameters,
     queryStringParameters,
   } as unknown as APIGatewayProxyEventV2;
@@ -35,6 +41,7 @@ function makeEvent(
 describe('getUserRatings handler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetLikedRatingIds.mockResolvedValue([]);
   });
 
   it('returns 400 when userId path parameter is missing', async () => {
@@ -114,5 +121,39 @@ describe('getUserRatings handler', () => {
     // Verify cursor decodes back to the key
     const decoded = JSON.parse(Buffer.from(body.nextCursor, 'base64url').toString('utf-8'));
     expect(decoded).toEqual(lastKey);
+  });
+
+  it('returns likedRatingIds for the current user', async () => {
+    mockSend.mockResolvedValueOnce({
+      Items: [
+        {
+          PK: 'USER#user-1',
+          SK: 'RATING#2024-01-01#r1',
+          ratingId: 'r1',
+          stars: 4,
+          entityType: 'Rating',
+          createdAt: '2024-01-01T00:00:00.000Z',
+        },
+        {
+          PK: 'USER#user-1',
+          SK: 'RATING#2024-01-02#r2',
+          ratingId: 'r2',
+          stars: 5,
+          entityType: 'Rating',
+          createdAt: '2024-01-02T00:00:00.000Z',
+        },
+      ],
+      LastEvaluatedKey: undefined,
+    });
+    mockGetLikedRatingIds.mockResolvedValueOnce(['r1']);
+
+    const result = await handler(
+      makeEvent({ userId: 'user-1' }, undefined, { 'x-user-id': 'viewer-1' }),
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body as string);
+    expect(body.likedRatingIds).toEqual(['r1']);
+    expect(mockGetLikedRatingIds).toHaveBeenCalledWith(['r1', 'r2'], 'viewer-1');
   });
 });

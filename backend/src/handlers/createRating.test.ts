@@ -115,6 +115,22 @@ describe('createRating handler', () => {
     const transactCall = mockSend.mock.calls[1][0];
     const userRatingItem = transactCall.input.TransactItems[0].Put.Item;
     expect(userRatingItem.caffeineMg).toBe(130);
+    expect(userRatingItem.likeCount).toBe(0);
+    expect(userRatingItem.commentCount).toBe(0);
+
+    // Verify place rating item also has likeCount/commentCount
+    const placeRatingItem = transactCall.input.TransactItems[1].Put.Item;
+    expect(placeRatingItem.likeCount).toBe(0);
+    expect(placeRatingItem.commentCount).toBe(0);
+
+    // Verify RATING#/META item is written for likes/comments partition
+    const ratingMetaItem = transactCall.input.TransactItems[2].Put.Item;
+    expect(ratingMetaItem.PK).toBe('RATING#rating-uuid-001');
+    expect(ratingMetaItem.SK).toBe('META');
+    expect(ratingMetaItem.entityType).toBe('RatingMeta');
+    expect(ratingMetaItem.likeCount).toBe(0);
+    expect(ratingMetaItem.commentCount).toBe(0);
+    expect(ratingMetaItem.userId).toBe('user-1');
 
     // Verify caffeine ADD on profile uses the client-sent value
     const caffeineAddCall = mockSend.mock.calls[5][0];

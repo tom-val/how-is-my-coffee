@@ -16,6 +16,8 @@ export interface Rating {
   photoKey?: string;
   photoUrl?: string;
   caffeineMg?: number;
+  likeCount?: number;
+  commentCount?: number;
   lat: number;
   lng: number;
   createdAt: string;
@@ -59,4 +61,26 @@ export interface Follower {
 export interface CaffeineStats {
   todayMg: number;
   totalMg: number;
+}
+
+export interface Like {
+  userId: string;
+  username: string;
+  displayName: string;
+}
+
+export interface Comment {
+  commentId: string;
+  userId: string;
+  username: string;
+  displayName: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface RatingDetail {
+  rating: Rating;
+  likes: Like[];
+  comments: Comment[];
+  isLikedByMe: boolean;
 }

@@ -4,11 +4,14 @@ import { dynamo, TABLE_NAME } from '../lib/dynamo.js';
 import { ok, badRequest, serverError } from '../lib/response.js';
 import { getPhotoUrl } from '../lib/s3.js';
 import { parsePaginationParams, encodeCursor } from '../lib/pagination.js';
+import { getLikedRatingIds } from '../lib/likes.js';
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   try {
     const userId = event.pathParameters?.userId;
     if (!userId) return badRequest('userId is required');
+
+    const currentUserId = event.headers?.['x-user-id'];
 
     const { limit, exclusiveStartKey } = parsePaginationParams(event);
 
@@ -34,8 +37,12 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       return rating;
     });
 
+    const ratingIds = ratings.map((r) => r.ratingId as string).filter(Boolean);
+    const likedRatingIds = await getLikedRatingIds(ratingIds, currentUserId);
+
     return ok({
       ratings,
+      likedRatingIds,
       nextCursor: encodeCursor(result.LastEvaluatedKey as Record<string, unknown> | undefined),
     });
   } catch (err) {

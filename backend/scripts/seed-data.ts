@@ -51,41 +51,61 @@ const items = [
   // Ratings for User 1
   {
     PK: `USER#${userId1}`, SK: 'RATING#2025-01-10T09:00:00.000Z#r1',
-    ratingId: 'r1', userId: userId1, placeId: 'place_cafe_nero', placeName: 'Caffe Nero',
+    ratingId: 'r1', userId: userId1, username: 'tomas', placeId: 'place_cafe_nero', placeName: 'Caffe Nero',
     stars: 4.5, drinkName: 'Flat White', description: 'Excellent flat white, smooth and creamy', caffeineMg: 130, lat: 54.6872, lng: 25.2797,
-    createdAt: '2025-01-10T09:00:00.000Z', entityType: 'Rating',
+    createdAt: '2025-01-10T09:00:00.000Z', likeCount: 0, commentCount: 0, entityType: 'Rating',
   },
   {
     PK: `USER#${userId1}`, SK: 'RATING#2025-01-15T10:30:00.000Z#r2',
-    ratingId: 'r2', userId: userId1, placeId: 'place_vero_cafe', placeName: 'Vero Cafe',
+    ratingId: 'r2', userId: userId1, username: 'tomas', placeId: 'place_vero_cafe', placeName: 'Vero Cafe',
     stars: 3.5, drinkName: 'Cappuccino', description: 'Good cappuccino but a bit lukewarm', caffeineMg: 130, lat: 54.6892, lng: 25.2800,
-    createdAt: '2025-01-15T10:30:00.000Z', entityType: 'Rating',
+    createdAt: '2025-01-15T10:30:00.000Z', likeCount: 0, commentCount: 0, entityType: 'Rating',
   },
   {
     PK: `USER#${userId1}`, SK: 'RATING#2025-02-01T08:00:00.000Z#r3',
-    ratingId: 'r3', userId: userId1, placeId: 'place_cafe_nero', placeName: 'Caffe Nero',
+    ratingId: 'r3', userId: userId1, username: 'tomas', placeId: 'place_cafe_nero', placeName: 'Caffe Nero',
     stars: 5, drinkName: 'Espresso', description: 'The best espresso I have ever had!', caffeineMg: 63, lat: 54.6872, lng: 25.2797,
-    createdAt: '2025-02-01T08:00:00.000Z', entityType: 'Rating',
+    createdAt: '2025-02-01T08:00:00.000Z', likeCount: 0, commentCount: 0, entityType: 'Rating',
   },
 
   // Place ratings (denormalized)
   {
     PK: 'PLACE#place_cafe_nero', SK: 'RATING#2025-01-10T09:00:00.000Z#r1',
-    ratingId: 'r1', userId: userId1, username: 'tomas', stars: 4.5,
+    ratingId: 'r1', userId: userId1, username: 'tomas', placeId: 'place_cafe_nero', placeName: 'Caffe Nero', stars: 4.5,
     drinkName: 'Flat White', description: 'Excellent flat white, smooth and creamy', caffeineMg: 130,
-    createdAt: '2025-01-10T09:00:00.000Z', entityType: 'PlaceRating',
+    createdAt: '2025-01-10T09:00:00.000Z', likeCount: 0, commentCount: 0, entityType: 'PlaceRating',
   },
   {
     PK: 'PLACE#place_cafe_nero', SK: 'RATING#2025-02-01T08:00:00.000Z#r3',
-    ratingId: 'r3', userId: userId1, username: 'tomas', stars: 5,
+    ratingId: 'r3', userId: userId1, username: 'tomas', placeId: 'place_cafe_nero', placeName: 'Caffe Nero', stars: 5,
     drinkName: 'Espresso', description: 'The best espresso I have ever had!', caffeineMg: 63,
-    createdAt: '2025-02-01T08:00:00.000Z', entityType: 'PlaceRating',
+    createdAt: '2025-02-01T08:00:00.000Z', likeCount: 0, commentCount: 0, entityType: 'PlaceRating',
   },
   {
     PK: 'PLACE#place_vero_cafe', SK: 'RATING#2025-01-15T10:30:00.000Z#r2',
-    ratingId: 'r2', userId: userId1, username: 'tomas', stars: 3.5,
+    ratingId: 'r2', userId: userId1, username: 'tomas', placeId: 'place_vero_cafe', placeName: 'Vero Cafe', stars: 3.5,
     drinkName: 'Cappuccino', description: 'Good cappuccino but a bit lukewarm', caffeineMg: 130,
-    createdAt: '2025-01-15T10:30:00.000Z', entityType: 'PlaceRating',
+    createdAt: '2025-01-15T10:30:00.000Z', likeCount: 0, commentCount: 0, entityType: 'PlaceRating',
+  },
+
+  // Rating META items (co-locates likes + comments)
+  {
+    PK: 'RATING#r1', SK: 'META',
+    ratingId: 'r1', userId: userId1, username: 'tomas', placeId: 'place_cafe_nero', placeName: 'Caffe Nero',
+    stars: 4.5, drinkName: 'Flat White', description: 'Excellent flat white, smooth and creamy', caffeineMg: 130, lat: 54.6872, lng: 25.2797,
+    createdAt: '2025-01-10T09:00:00.000Z', likeCount: 0, commentCount: 0, entityType: 'RatingMeta',
+  },
+  {
+    PK: 'RATING#r2', SK: 'META',
+    ratingId: 'r2', userId: userId1, username: 'tomas', placeId: 'place_vero_cafe', placeName: 'Vero Cafe',
+    stars: 3.5, drinkName: 'Cappuccino', description: 'Good cappuccino but a bit lukewarm', caffeineMg: 130, lat: 54.6892, lng: 25.2800,
+    createdAt: '2025-01-15T10:30:00.000Z', likeCount: 0, commentCount: 0, entityType: 'RatingMeta',
+  },
+  {
+    PK: 'RATING#r3', SK: 'META',
+    ratingId: 'r3', userId: userId1, username: 'tomas', placeId: 'place_cafe_nero', placeName: 'Caffe Nero',
+    stars: 5, drinkName: 'Espresso', description: 'The best espresso I have ever had!', caffeineMg: 63, lat: 54.6872, lng: 25.2797,
+    createdAt: '2025-02-01T08:00:00.000Z', likeCount: 0, commentCount: 0, entityType: 'RatingMeta',
   },
 
   // Place META
@@ -117,15 +137,21 @@ const items = [
   // Ratings for User 2
   {
     PK: `USER#${userId2}`, SK: 'RATING#2025-01-20T14:00:00.000Z#r4',
-    ratingId: 'r4', userId: userId2, placeId: 'place_cafe_nero', placeName: 'Caffe Nero',
+    ratingId: 'r4', userId: userId2, username: 'coffee_lover', placeId: 'place_cafe_nero', placeName: 'Caffe Nero',
     stars: 4, drinkName: 'Latte', description: 'Solid coffee, nice atmosphere', caffeineMg: 130, lat: 54.6872, lng: 25.2797,
-    createdAt: '2025-01-20T14:00:00.000Z', entityType: 'Rating',
+    createdAt: '2025-01-20T14:00:00.000Z', likeCount: 0, commentCount: 0, entityType: 'Rating',
   },
   {
     PK: 'PLACE#place_cafe_nero', SK: 'RATING#2025-01-20T14:00:00.000Z#r4',
-    ratingId: 'r4', userId: userId2, username: 'coffee_lover', stars: 4,
+    ratingId: 'r4', userId: userId2, username: 'coffee_lover', placeId: 'place_cafe_nero', placeName: 'Caffe Nero', stars: 4,
     drinkName: 'Latte', description: 'Solid coffee, nice atmosphere', caffeineMg: 130,
-    createdAt: '2025-01-20T14:00:00.000Z', entityType: 'PlaceRating',
+    createdAt: '2025-01-20T14:00:00.000Z', likeCount: 0, commentCount: 0, entityType: 'PlaceRating',
+  },
+  {
+    PK: 'RATING#r4', SK: 'META',
+    ratingId: 'r4', userId: userId2, username: 'coffee_lover', placeId: 'place_cafe_nero', placeName: 'Caffe Nero',
+    stars: 4, drinkName: 'Latte', description: 'Solid coffee, nice atmosphere', caffeineMg: 130, lat: 54.6872, lng: 25.2797,
+    createdAt: '2025-01-20T14:00:00.000Z', likeCount: 0, commentCount: 0, entityType: 'RatingMeta',
   },
   {
     PK: `USER#${userId2}`, SK: 'PLACE#place_cafe_nero',

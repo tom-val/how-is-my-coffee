@@ -12,6 +12,7 @@ import { PlaceDetailPage } from './pages/PlaceDetailPage';
 import { FriendsPage } from './pages/FriendsPage';
 import { FriendRatingsPage } from './pages/FriendRatingsPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { RatingDetailPage } from './pages/RatingDetailPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,6 +74,7 @@ export default function App() {
               <Route path="/my-ratings" element={<MyRatingsPage />} />
               <Route path="/places" element={<PlacesPage />} />
               <Route path="/places/:placeId" element={<PlaceDetailPage />} />
+              <Route path="/ratings/:ratingId" element={<RatingDetailPage />} />
               <Route path="/friends" element={<FriendsPage />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>

@@ -40,5 +40,8 @@ locals {
     getFeed         = { method = "GET", route = "/api/feed" }
     resolveCaffeine  = { method = "POST", route = "/api/drinks/resolve-caffeine", timeout = 20 }
     getPresignedUrl = { method = "POST", route = "/api/photos/upload-url" }
+    toggleLike      = { method = "POST", route = "/api/ratings/{ratingId}/like" }
+    getRatingDetail = { method = "GET", route = "/api/ratings/{ratingId}" }
+    createComment   = { method = "POST", route = "/api/ratings/{ratingId}/comments" }
   }
 }
