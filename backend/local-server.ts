@@ -17,6 +17,7 @@ import { handler as getPresignedUrl } from './src/handlers/getPresignedUrl.js';
 import { handler as loginUser } from './src/handlers/loginUser.js';
 import { handler as getFeed } from './src/handlers/getFeed.js';
 import { handler as getCaffeineStats } from './src/handlers/getCaffeineStats.js';
+import { handler as resolveCaffeine } from './src/handlers/resolveCaffeine.js';
 
 const app = express();
 app.use(cors());
@@ -74,6 +75,9 @@ app.get('/api/feed', adapt(getFeed));
 
 // Caffeine route
 app.get('/api/users/:userId/caffeine', adapt(getCaffeineStats));
+
+// Drinks routes
+app.post('/api/drinks/resolve-caffeine', adapt(resolveCaffeine));
 
 // Photo routes
 app.post('/api/photos/upload-url', adapt(getPresignedUrl));

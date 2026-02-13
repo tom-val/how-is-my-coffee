@@ -38,6 +38,7 @@ locals {
     getFollowers     = { method = "GET", route = "/api/users/{userId}/followers" }
     getCaffeineStats = { method = "GET", route = "/api/users/{userId}/caffeine" }
     getFeed         = { method = "GET", route = "/api/feed" }
+    resolveCaffeine  = { method = "POST", route = "/api/drinks/resolve-caffeine" }
     getPresignedUrl = { method = "POST", route = "/api/photos/upload-url" }
   }
 }

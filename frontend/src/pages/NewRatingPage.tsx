@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -51,6 +51,9 @@ export function NewRatingPage() {
   const [address, setAddress] = useState('');
   const [addressFromUser, setAddressFromUser] = useState(false);
   const [addressLoading, setAddressLoading] = useState(false);
+  const [caffeineMg, setCaffeineMg] = useState(0);
+  const [caffeineSource, setCaffeineSource] = useState<'static' | 'ai'>('static');
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const [error, setError] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -72,6 +75,37 @@ export function NewRatingPage() {
     });
     return () => { cancelled = true; };
   }, [effectiveLat, effectiveLng, addressFromUser]);
+
+  // Resolve caffeine from static list with debounce (~300ms after user stops typing)
+  useEffect(() => {
+    if (!drinkName.trim()) {
+      setCaffeineMg(0);
+      setCaffeineSource('static');
+      return;
+    }
+    const timer = setTimeout(() => {
+      setCaffeineMg(resolveCaffeineMg(drinkName));
+      setCaffeineSource('static');
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [drinkName]);
+
+  const handleAskAi = useCallback(async () => {
+    if (!drinkName.trim() || isAiLoading) return;
+    setIsAiLoading(true);
+    try {
+      const result = await api.resolveCaffeineAi(drinkName.trim());
+      if (result.source === 'ai') {
+        setCaffeineMg(result.caffeineMg);
+        setCaffeineSource('ai');
+      }
+      // On error source, keep existing static value
+    } catch {
+      // Keep existing static value on network failure
+    } finally {
+      setIsAiLoading(false);
+    }
+  }, [drinkName, isAiLoading]);
 
   // Fetch previously visited places for autocomplete
   const { data: placesData } = useQuery({
@@ -109,6 +143,7 @@ export function NewRatingPage() {
         lat: finalLat,
         lng: finalLng,
         address: address.trim() || undefined,
+        caffeineMg,
       });
     },
     onSuccess: async () => {
@@ -280,11 +315,22 @@ export function NewRatingPage() {
             autoComplete="off"
           />
           {drinkName.trim() && (
-            <p className="text-xs text-stone-400 mt-1">
-              {resolveCaffeineMg(drinkName) > 0
-                ? `☕ ${resolveCaffeineMg(drinkName)} mg caffeine`
-                : '☕ Unknown drink — 0 mg caffeine'}
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-xs text-stone-400">
+                {caffeineMg > 0
+                  ? `☕ ${caffeineMg} mg caffeine`
+                  : '☕ Unknown drink — 0 mg caffeine'}
+                {caffeineSource === 'ai' && ' (AI)'}
+              </p>
+              <button
+                type="button"
+                onClick={handleAskAi}
+                disabled={isAiLoading}
+                className="text-xs px-2 py-0.5 rounded-full border border-amber-500 text-amber-700 hover:bg-amber-50 disabled:opacity-50 transition-colors"
+              >
+                {isAiLoading ? 'Asking AI...' : 'Ask AI'}
+              </button>
+            </div>
           )}
         </div>
 
