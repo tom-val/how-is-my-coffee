@@ -3,8 +3,6 @@ import { TransactWriteCommand, GetCommand, UpdateCommand, QueryCommand } from '@
 import { z } from 'zod';
 import { dynamo, TABLE_NAME } from '../lib/dynamo.js';
 import { created, badRequest, serverError } from '../lib/response.js';
-import { resolveCaffeineMg } from '../lib/caffeine.js';
-
 const CreateRatingSchema = z.object({
   placeId: z.string().min(1),
   placeName: z.string().min(1).max(200),
@@ -15,6 +13,7 @@ const CreateRatingSchema = z.object({
   lat: z.number(),
   lng: z.number(),
   address: z.string().max(300).optional(),
+  caffeineMg: z.number().min(0).max(1000).optional().default(0),
 });
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
@@ -26,10 +25,9 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     const parsed = CreateRatingSchema.safeParse(body);
     if (!parsed.success) return badRequest(parsed.error.issues[0].message);
 
-    const { placeId, placeName, stars, drinkName, description, photoKey, lat, lng, address } = parsed.data;
+    const { placeId, placeName, stars, drinkName, description, photoKey, lat, lng, address, caffeineMg } = parsed.data;
     const ratingId = crypto.randomUUID();
     const timestamp = new Date().toISOString();
-    const caffeineMg = resolveCaffeineMg(drinkName);
 
     // Get username for denormalized data on place ratings
     const profileResult = await dynamo.send(

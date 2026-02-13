@@ -72,6 +72,7 @@ export const api = {
     lat: number;
     lng: number;
     address?: string;
+    caffeineMg?: number;
   }) {
     return request<{ ratingId: string }>('/ratings', {
       method: 'POST',
@@ -108,6 +109,12 @@ export const api = {
   },
 
   // Caffeine
+  resolveCaffeineAi(drinkName: string) {
+    return request<{ caffeineMg: number; source: string }>('/drinks/resolve-caffeine', {
+      method: 'POST',
+      body: JSON.stringify({ drinkName }),
+    });
+  },
   getCaffeineStats(userId: string) {
     return request<CaffeineStats>(`/users/${userId}/caffeine`);
   },

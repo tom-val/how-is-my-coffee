@@ -62,10 +62,13 @@ resource "aws_lambda_function" "handlers" {
   source_code_hash = filebase64sha256("${path.module}/../dist/lambdas/${each.key}.zip")
 
   environment {
-    variables = {
-      S3_BUCKET = aws_s3_bucket.photos.id
-      S3_REGION = var.aws_region
-    }
+    variables = merge(
+      {
+        S3_BUCKET = aws_s3_bucket.photos.id
+        S3_REGION = var.aws_region
+      },
+      var.openai_api_key != "" ? { OPENAI_API_KEY = var.openai_api_key } : {}
+    )
   }
 }
 

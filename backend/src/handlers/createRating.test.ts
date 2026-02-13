@@ -41,6 +41,7 @@ const validBody = {
   lat: 51.5,
   lng: -0.1,
   address: '123 Coffee St',
+  caffeineMg: 130,
 };
 
 describe('createRating handler', () => {
@@ -110,12 +111,12 @@ describe('createRating handler', () => {
     // Profile + Transact + Upsert + Query + META update + caffeine ADD
     expect(mockSend).toHaveBeenCalledTimes(6);
 
-    // Verify caffeineMg stored on the user rating item
+    // Verify caffeineMg from request body is stored on the user rating item
     const transactCall = mockSend.mock.calls[1][0];
     const userRatingItem = transactCall.input.TransactItems[0].Put.Item;
-    expect(userRatingItem.caffeineMg).toBe(130); // "Flat White" → 130 mg
+    expect(userRatingItem.caffeineMg).toBe(130);
 
-    // Verify caffeine ADD on profile
+    // Verify caffeine ADD on profile uses the client-sent value
     const caffeineAddCall = mockSend.mock.calls[5][0];
     expect(caffeineAddCall.input.UpdateExpression).toBe('ADD totalCaffeineMg :mg');
     expect(caffeineAddCall.input.ExpressionAttributeValues[':mg']).toBe(130);
@@ -149,7 +150,7 @@ describe('createRating handler', () => {
     expect(metaUpdateCall.input.ExpressionAttributeValues[':cnt']).toBe(2);
   });
 
-  it('stores 0 caffeineMg for an unrecognised drink name', async () => {
+  it('defaults caffeineMg to 0 when not provided in request body', async () => {
     mockSend.mockResolvedValueOnce({ Item: { username: 'testuser' } });
     mockSend.mockResolvedValueOnce({});
     mockSend.mockResolvedValueOnce({});
@@ -157,16 +158,15 @@ describe('createRating handler', () => {
     mockSend.mockResolvedValueOnce({});
     mockSend.mockResolvedValueOnce({});
 
+    const { caffeineMg: _, ...bodyWithoutCaffeine } = validBody;
+
     const result = await handler(
-      makeEvent(
-        { ...validBody, drinkName: 'Mystery Beverage' },
-        { 'x-user-id': 'user-1' },
-      ),
+      makeEvent(bodyWithoutCaffeine, { 'x-user-id': 'user-1' }),
     );
 
     expect(result.statusCode).toBe(201);
 
-    // Verify caffeineMg is 0 on the rating item
+    // Verify caffeineMg defaults to 0 on the rating item
     const transactCall = mockSend.mock.calls[1][0];
     const userRatingItem = transactCall.input.TransactItems[0].Put.Item;
     expect(userRatingItem.caffeineMg).toBe(0);
