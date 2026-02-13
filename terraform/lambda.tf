@@ -55,7 +55,7 @@ resource "aws_lambda_function" "handlers" {
   role          = aws_iam_role.lambda.arn
   handler       = "index.handler"
   runtime       = "nodejs20.x"
-  timeout       = 10
+  timeout       = lookup(each.value, "timeout", 10)
   memory_size   = 256
 
   filename         = "${path.module}/../dist/lambdas/${each.key}.zip"
