@@ -18,6 +18,9 @@ import { handler as loginUser } from './src/handlers/loginUser.js';
 import { handler as getFeed } from './src/handlers/getFeed.js';
 import { handler as getCaffeineStats } from './src/handlers/getCaffeineStats.js';
 import { handler as resolveCaffeine } from './src/handlers/resolveCaffeine.js';
+import { handler as toggleLike } from './src/handlers/toggleLike.js';
+import { handler as getRatingDetail } from './src/handlers/getRatingDetail.js';
+import { handler as createComment } from './src/handlers/createComment.js';
 
 const app = express();
 app.use(cors());
@@ -58,6 +61,9 @@ app.get('/api/users/:username', adapt(getUser));
 
 // Rating routes
 app.post('/api/ratings', adapt(createRating));
+app.get('/api/ratings/:ratingId', adapt(getRatingDetail));
+app.post('/api/ratings/:ratingId/like', adapt(toggleLike));
+app.post('/api/ratings/:ratingId/comments', adapt(createComment));
 app.get('/api/users/:userId/ratings', adapt(getUserRatings));
 
 // Place routes

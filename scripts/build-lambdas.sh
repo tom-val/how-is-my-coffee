@@ -17,6 +17,9 @@ HANDLERS=(
   resolveCaffeine
   getFeed
   getPresignedUrl
+  toggleLike
+  getRatingDetail
+  createComment
 )
 
 DIST_DIR="dist/lambdas"

@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { RatingCard } from '../components/RatingCard';
 import { Link } from 'react-router-dom';
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
+import { useToggleLike } from '../hooks/useToggleLike';
 
 export function HomePage() {
   const { user } = useAuth();
@@ -26,6 +27,16 @@ export function HomePage() {
     () => data?.pages.flatMap((p) => p.ratings ?? []) ?? [],
     [data]
   );
+
+  const likedRatingIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const page of data?.pages ?? []) {
+      for (const id of page.likedRatingIds ?? []) ids.add(id);
+    }
+    return ids;
+  }, [data]);
+
+  const { toggleLike } = useToggleLike([['feed']]);
 
   const handleLoadMore = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) fetchNextPage();
@@ -64,7 +75,13 @@ export function HomePage() {
 
       <div className="space-y-4">
         {ratings.map((r) => (
-          <RatingCard key={r.ratingId} rating={r} showUser />
+          <RatingCard
+            key={r.ratingId}
+            rating={r}
+            showUser
+            isLikedByMe={likedRatingIds.has(r.ratingId)}
+            onToggleLike={toggleLike}
+          />
         ))}
       </div>
 

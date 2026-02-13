@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { RatingCard } from '../components/RatingCard';
 import { StarRating } from '../components/StarRating';
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
+import { useToggleLike } from '../hooks/useToggleLike';
 
 interface DrinkAverage {
   drinkName: string;
@@ -39,6 +40,16 @@ export function PlaceDetailPage() {
     () => ratingsData?.pages.flatMap((p) => p.ratings ?? []) ?? [],
     [ratingsData]
   );
+
+  const likedRatingIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const page of ratingsData?.pages ?? []) {
+      for (const id of page.likedRatingIds ?? []) ids.add(id);
+    }
+    return ids;
+  }, [ratingsData]);
+
+  const { toggleLike } = useToggleLike([['placeRatings', placeId]]);
 
   const isLoading = placeLoading || ratingsLoading;
 
@@ -135,7 +146,14 @@ export function PlaceDetailPage() {
 
       <div className="space-y-4">
         {ratings.map((r) => (
-          <RatingCard key={r.ratingId} rating={r} showPlace={false} showUser />
+          <RatingCard
+            key={r.ratingId}
+            rating={r}
+            showPlace={false}
+            showUser
+            isLikedByMe={likedRatingIds.has(r.ratingId)}
+            onToggleLike={toggleLike}
+          />
         ))}
       </div>
 

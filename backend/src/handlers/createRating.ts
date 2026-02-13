@@ -38,7 +38,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     );
     const username = (profileResult.Item?.username as string) || 'unknown';
 
-    // Transact: write user rating + place rating
+    // Transact: write user rating + place rating + rating META (for likes/comments)
     await dynamo.send(
       new TransactWriteCommand({
         TransactItems: [
@@ -60,6 +60,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
                 lng,
                 address,
                 caffeineMg,
+                likeCount: 0,
+                commentCount: 0,
                 createdAt: timestamp,
                 entityType: 'Rating',
               },
@@ -80,8 +82,36 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
                 photoKey,
                 address,
                 caffeineMg,
+                likeCount: 0,
+                commentCount: 0,
                 createdAt: timestamp,
                 entityType: 'PlaceRating',
+              },
+            },
+          },
+          {
+            Put: {
+              TableName: TABLE_NAME,
+              Item: {
+                PK: `RATING#${ratingId}`,
+                SK: 'META',
+                ratingId,
+                userId,
+                username,
+                placeId,
+                placeName,
+                stars,
+                drinkName,
+                description,
+                photoKey,
+                lat,
+                lng,
+                address,
+                caffeineMg,
+                likeCount: 0,
+                commentCount: 0,
+                createdAt: timestamp,
+                entityType: 'RatingMeta',
               },
             },
           },

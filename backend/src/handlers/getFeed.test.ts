@@ -12,6 +12,11 @@ vi.mock('../lib/s3.js', () => ({
   getPhotoUrl: vi.fn((key: string) => `/mocked/${key}`),
 }));
 
+const mockGetLikedRatingIds = vi.fn();
+vi.mock('../lib/likes.js', () => ({
+  getLikedRatingIds: (...args: unknown[]) => mockGetLikedRatingIds(...args),
+}));
+
 import { handler as rawHandler } from './getFeed.js';
 
 type Result = APIGatewayProxyStructuredResultV2;
@@ -34,6 +39,7 @@ function makeEvent(
 describe('getFeed handler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetLikedRatingIds.mockResolvedValue([]);
   });
 
   it('returns 400 when x-user-id header is missing', async () => {
@@ -51,6 +57,7 @@ describe('getFeed handler', () => {
     expect(result.statusCode).toBe(200);
     const body = JSON.parse(result.body as string);
     expect(body.ratings).toEqual([]);
+    expect(body.likedRatingIds).toEqual([]);
     expect(body.nextCursor).toBeNull();
   });
 

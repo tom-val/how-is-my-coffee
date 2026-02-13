@@ -4,6 +4,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tansta
 import { api, getUserId } from '../api/client';
 import { RatingCard } from '../components/RatingCard';
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
+import { useToggleLike } from '../hooks/useToggleLike';
 
 export function FriendRatingsPage() {
   const { username } = useParams<{ username: string }>();
@@ -35,6 +36,16 @@ export function FriendRatingsPage() {
     () => ratingsData?.pages.flatMap((p) => p.ratings ?? []) ?? [],
     [ratingsData]
   );
+
+  const likedRatingIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const page of ratingsData?.pages ?? []) {
+      for (const id of page.likedRatingIds ?? []) ids.add(id);
+    }
+    return ids;
+  }, [ratingsData]);
+
+  const { toggleLike } = useToggleLike([['userRatings', user?.userId]]);
 
   // Check if already friends
   const { data: friendsData } = useQuery({
@@ -120,7 +131,12 @@ export function FriendRatingsPage() {
 
       <div className="space-y-4">
         {ratings.map((r) => (
-          <RatingCard key={r.ratingId} rating={r} />
+          <RatingCard
+            key={r.ratingId}
+            rating={r}
+            isLikedByMe={likedRatingIds.has(r.ratingId)}
+            onToggleLike={toggleLike}
+          />
         ))}
       </div>
 
