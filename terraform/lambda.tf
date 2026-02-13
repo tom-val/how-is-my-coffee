@@ -34,6 +34,8 @@ resource "aws_iam_role_policy" "lambda_app" {
           "dynamodb:GetItem",
           "dynamodb:Query",
           "dynamodb:UpdateItem",
+          "dynamodb:BatchGetItem",
+          "dynamodb:DeleteItem",
         ]
         Resource = aws_dynamodb_table.main.arn
       },
