@@ -10,6 +10,14 @@ function makeOkResponse(content: string) {
   };
 }
 
+function makeOutputResponse(content: string) {
+  return {
+    ok: true,
+    json: () =>
+      Promise.resolve({ output: [{ content: [{ text: content }] }] }),
+  };
+}
+
 describe('resolveWithAi', () => {
   let resolveWithAi: typeof import('./openai.js').resolveWithAi;
 
@@ -49,8 +57,7 @@ describe('resolveWithAi', () => {
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.model).toBe('gpt-5-mini');
-    expect(body.temperature).toBe(0);
-    expect(body.max_completion_tokens).toBe(10);
+    expect(body.max_completion_tokens).toBe(2048);
     expect(body.messages[1].content).toContain('Americano');
   });
 
@@ -82,6 +89,14 @@ describe('resolveWithAi', () => {
     const result = await resolveWithAi('Water');
 
     expect(result).toBeNull();
+  });
+
+  it('parses output-format response (Responses API)', async () => {
+    fetchMock.mockResolvedValueOnce(makeOutputResponse('63'));
+
+    const result = await resolveWithAi('Espresso');
+
+    expect(result).toBe(63);
   });
 
   it('returns null on network error', async () => {

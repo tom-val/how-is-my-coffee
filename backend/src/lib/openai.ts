@@ -1,7 +1,7 @@
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const MODEL = 'gpt-5-mini';
-const REQUEST_TIMEOUT_MS = 5_000;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 /**
  * Ask GPT-5 mini for the caffeine content of a drink.
@@ -26,15 +26,14 @@ export async function resolveWithAi(drinkName: string): Promise<number | null> {
           {
             role: 'system',
             content:
-              'You are a caffeine content database. Reply with only the number of milligrams as an integer.',
+              'You are a caffeine content expert. Given a drink name, reply with your best estimate of the caffeine content in milligrams for a standard single serving. Reply with ONLY an integer. For non-caffeinated drinks reply 0.',
           },
           {
             role: 'user',
-            content: `Caffeine in mg for a single serving of "${drinkName}"? Reply ONLY a number. If unknown reply 0.`,
+            content: `How many mg of caffeine in "${drinkName}"?`,
           },
         ],
-        max_completion_tokens: 10,
-        temperature: 0,
+        max_completion_tokens: 2048,
       }),
       signal: controller.signal,
     });
@@ -47,11 +46,16 @@ export async function resolveWithAi(drinkName: string): Promise<number | null> {
       return null;
     }
 
-    const data = (await response.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const text = data.choices?.[0]?.message?.content?.trim();
-    const mg = parseInt(text ?? '', 10);
+    const data = await response.json();
+    console.debug(`[OpenAI] Raw response: ${JSON.stringify(data)}`);
+
+    // gpt-5-mini uses Responses API structure with output array
+    const outputText =
+      data.output?.[0]?.content?.[0]?.text ??
+      data.choices?.[0]?.message?.content ??
+      '';
+    const text = String(outputText).trim();
+    const mg = parseInt(text, 10);
 
     if (isNaN(mg) || mg < 0) {
       console.warn(`[OpenAI] Unparseable response: "${text}"`);
