@@ -72,7 +72,6 @@ export const api = {
     photoKey?: string;
     lat: number;
     lng: number;
-    address?: string;
     caffeineMg?: number;
   }) {
     return request<{ ratingId: string }>('/ratings', {
