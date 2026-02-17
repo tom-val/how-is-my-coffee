@@ -8,25 +8,19 @@ import { StarRating } from '../components/StarRating';
 import { resolveCaffeineMg } from '../lib/caffeine';
 import { resizeImage } from '../lib/resizeImage';
 
-async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+async function forwardGeocode(query: string): Promise<{ lat: number; lng: number } | null> {
   try {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
       { headers: { 'Accept-Language': 'en' } }
     );
     if (!res.ok) return null;
     const data = await res.json();
-    const a = data.address;
-    if (!a) return null;
-    // Build a readable address: road + house_number, city
-    const parts: string[] = [];
-    const road = a.road || a.pedestrian || a.street || '';
-    if (road) {
-      parts.push(a.house_number ? `${road} ${a.house_number}` : road);
-    }
-    const city = a.city || a.town || a.village || '';
-    if (city) parts.push(city);
-    return parts.length > 0 ? parts.join(', ') : null;
+    if (!data.length) return null;
+    const lat = parseFloat(data[0].lat);
+    const lng = parseFloat(data[0].lon);
+    if (isNaN(lat) || isNaN(lng)) return null;
+    return { lat, lng };
   } catch {
     return null;
   }
@@ -48,33 +42,27 @@ export function NewRatingPage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
-  const [address, setAddress] = useState('');
-  const [addressFromUser, setAddressFromUser] = useState(false);
-  const [addressLoading, setAddressLoading] = useState(false);
   const [caffeineMg, setCaffeineMg] = useState(0);
   const [caffeineSource, setCaffeineSource] = useState<'static' | 'ai'>('static');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [error, setError] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // Reverse geocode when GPS coordinates are available and address not manually set
+  // Location override state
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [fallbackAddress, setFallbackAddress] = useState('');
+  const [isGeocodingAddress, setIsGeocodingAddress] = useState(false);
+  const [geocodeError, setGeocodeError] = useState('');
+
   const effectiveLat = lat ?? geo.lat;
   const effectiveLng = lng ?? geo.lng;
+  const hasCoordinates = effectiveLat !== null && effectiveLng !== null;
 
+  // Auto-detect GPS on mount
   useEffect(() => {
-    if (!effectiveLat || !effectiveLng || addressFromUser) return;
-    let cancelled = false;
-    // Start async geocoding — loading state is set in the microtask to avoid synchronous setState in effect
-    Promise.resolve().then(() => {
-      if (!cancelled) setAddressLoading(true);
-    });
-    reverseGeocode(effectiveLat, effectiveLng).then((result) => {
-      if (cancelled) return;
-      setAddressLoading(false);
-      if (result) setAddress(result);
-    });
-    return () => { cancelled = true; };
-  }, [effectiveLat, effectiveLng, addressFromUser]);
+    geo.getLocation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Resolve caffeine from static list with debounce (~300ms after user stops typing)
   useEffect(() => {
@@ -99,13 +87,33 @@ export function NewRatingPage() {
         setCaffeineMg(result.caffeineMg);
         setCaffeineSource('ai');
       }
-      // On error source, keep existing static value
     } catch {
       // Keep existing static value on network failure
     } finally {
       setIsAiLoading(false);
     }
   }, [drinkName, isAiLoading]);
+
+  const handleAddressLookup = useCallback(async () => {
+    if (!fallbackAddress.trim() || isGeocodingAddress) return;
+    setIsGeocodingAddress(true);
+    setGeocodeError('');
+    try {
+      const result = await forwardGeocode(fallbackAddress.trim());
+      if (result) {
+        setLat(result.lat);
+        setLng(result.lng);
+        setIsEditingLocation(false);
+        setFallbackAddress('');
+      } else {
+        setGeocodeError('Could not find coordinates for this address');
+      }
+    } catch {
+      setGeocodeError('Failed to look up address');
+    } finally {
+      setIsGeocodingAddress(false);
+    }
+  }, [fallbackAddress, isGeocodingAddress]);
 
   // Fetch previously visited places for autocomplete
   const { data: placesData } = useQuery({
@@ -129,8 +137,8 @@ export function NewRatingPage() {
         photoKey = await api.uploadPhoto(photo);
       }
 
-      const finalLat = lat ?? geo.lat ?? 0;
-      const finalLng = lng ?? geo.lng ?? 0;
+      const finalLat = effectiveLat ?? 0;
+      const finalLng = effectiveLng ?? 0;
       const finalPlaceId = placeId ?? `place_${placeName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
 
       return api.createRating({
@@ -142,7 +150,6 @@ export function NewRatingPage() {
         photoKey,
         lat: finalLat,
         lng: finalLng,
-        address: address.trim() || undefined,
         caffeineMg,
       });
     },
@@ -185,8 +192,8 @@ export function NewRatingPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (stars === 0) { setError('Please select a star rating'); return; }
-    if (!placeName.trim()) { setError('Please enter a place name'); return; }
     if (!drinkName.trim()) { setError('Please enter a drink name'); return; }
+    if (!placeName.trim()) { setError('Please enter a place name'); return; }
     setError('');
     mutation.mutate();
   };
@@ -237,72 +244,6 @@ export function NewRatingPage() {
           <StarRating value={stars} onChange={setStars} size="lg" />
         </div>
 
-        {/* Place Name */}
-        <div className="relative">
-          <label className="block text-sm font-medium text-stone-700 mb-1">Place Name</label>
-          <input
-            type="text"
-            value={placeName}
-            onChange={(e) => {
-              setPlaceName(e.target.value);
-              setPlaceId(null);
-              setAddress('');
-              setAddressFromUser(false);
-              setShowSuggestions(true);
-            }}
-            onFocus={() => setShowSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-            placeholder="e.g. Caffe Nero"
-            autoComplete="off"
-          />
-          {showSuggestions && suggestions.length > 0 && (
-            <ul className="absolute z-20 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-              {suggestions.map((p) => (
-                <li key={p.placeId}>
-                  <button
-                    type="button"
-                    className="w-full text-left px-3 py-2.5 hover:bg-amber-50 transition-colors"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      setPlaceName(p.placeName);
-                      setPlaceId(p.placeId);
-                      setLat(p.lat);
-                      setLng(p.lng);
-                      setAddress(p.address || '');
-                      setAddressFromUser(!!p.address);
-                      setShowSuggestions(false);
-                    }}
-                  >
-                    <span className="font-medium text-stone-800">{p.placeName}</span>
-                    {p.address && (
-                      <span className="block text-xs text-stone-400 mt-0.5">{p.address}</span>
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Address */}
-        <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1">Address</label>
-          <div className="relative">
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => { setAddress(e.target.value); setAddressFromUser(true); }}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-              placeholder="e.g. Gedimino pr. 9, Vilnius"
-              autoComplete="off"
-            />
-            {addressLoading && (
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">Detecting...</span>
-            )}
-          </div>
-        </div>
-
         {/* Drink Name */}
         <div>
           <label className="block text-sm font-medium text-stone-700 mb-1">Drink Name</label>
@@ -311,7 +252,7 @@ export function NewRatingPage() {
             value={drinkName}
             onChange={(e) => setDrinkName(e.target.value)}
             className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-            placeholder="e.g. flat white, cappuccino, green tea, kapučinas"
+            placeholder="e.g. flat white, cappuccino, green tea"
             autoComplete="off"
           />
           {drinkName.trim() && (
@@ -337,44 +278,119 @@ export function NewRatingPage() {
         {/* Location */}
         <div>
           <label className="block text-sm font-medium text-stone-700 mb-1">Location</label>
-          {geo.lat && geo.lng ? (
-            <div className="flex items-center gap-2 text-sm text-stone-600 bg-green-50 px-3 py-2 rounded-lg">
-              <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.06l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+          {hasCoordinates && !isEditingLocation ? (
+            <div className="flex items-center justify-between text-sm text-stone-600 bg-green-50 px-3 py-2 rounded-lg">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-600 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.06l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                </svg>
+                <span>Location detected ({effectiveLat!.toFixed(4)}, {effectiveLng!.toFixed(4)})</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditingLocation(true)}
+                className="text-xs text-amber-700 hover:text-amber-800 underline shrink-0 ml-2"
+              >
+                Change
+              </button>
+            </div>
+          ) : geo.loading && !isEditingLocation ? (
+            <div className="flex items-center gap-2 text-sm text-stone-500 bg-stone-50 px-3 py-2 rounded-lg">
+              <svg className="w-4 h-4 animate-spin text-amber-600" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              <span>Location detected ({geo.lat.toFixed(4)}, {geo.lng.toFixed(4)})</span>
+              <span>Detecting location...</span>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={geo.getLocation}
-              disabled={geo.loading}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm text-stone-600 hover:bg-stone-50 transition-colors text-left"
-            >
-              {geo.loading ? 'Detecting location...' : 'Tap to detect GPS location'}
-            </button>
+            <div className="space-y-2">
+              {geo.error && !isEditingLocation && (
+                <p className="text-amber-600 text-xs">GPS unavailable. Enter an address to look up coordinates.</p>
+              )}
+              {isEditingLocation && (
+                <p className="text-stone-500 text-xs">Enter an address to set a different location.</p>
+              )}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={fallbackAddress}
+                  onChange={(e) => { setFallbackAddress(e.target.value); setGeocodeError(''); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddressLookup(); } }}
+                  className="flex-1 px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm"
+                  placeholder="e.g. Gedimino pr. 9, Vilnius"
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddressLookup}
+                  disabled={isGeocodingAddress || !fallbackAddress.trim()}
+                  className="px-3 py-2 bg-amber-700 text-white rounded-lg text-sm font-medium hover:bg-amber-800 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  {isGeocodingAddress ? 'Looking up...' : 'Look up'}
+                </button>
+              </div>
+              {geocodeError && <p className="text-red-500 text-xs">{geocodeError}</p>}
+              {isEditingLocation && (
+                <button
+                  type="button"
+                  onClick={() => { setIsEditingLocation(false); setFallbackAddress(''); setGeocodeError(''); }}
+                  className="text-xs text-stone-500 hover:text-stone-700 underline"
+                >
+                  Cancel
+                </button>
+              )}
+              {!isEditingLocation && !geo.error && (
+                <button
+                  type="button"
+                  onClick={geo.getLocation}
+                  className="text-xs text-amber-700 hover:text-amber-800 underline"
+                >
+                  Try GPS again
+                </button>
+              )}
+            </div>
           )}
-          {geo.error && <p className="text-red-500 text-xs mt-1">{geo.error}</p>}
+        </div>
 
-          {/* Manual lat/lng override */}
-          <div className="flex gap-2 mt-2">
-            <input
-              type="number"
-              step="any"
-              value={lat ?? geo.lat ?? ''}
-              onChange={(e) => setLat(parseFloat(e.target.value) || null)}
-              className="flex-1 px-3 py-1.5 border border-stone-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500"
-              placeholder="Latitude"
-            />
-            <input
-              type="number"
-              step="any"
-              value={lng ?? geo.lng ?? ''}
-              onChange={(e) => setLng(parseFloat(e.target.value) || null)}
-              className="flex-1 px-3 py-1.5 border border-stone-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500"
-              placeholder="Longitude"
-            />
-          </div>
+        {/* Place Name */}
+        <div className="relative">
+          <label className="block text-sm font-medium text-stone-700 mb-1">Place Name</label>
+          <input
+            type="text"
+            value={placeName}
+            onChange={(e) => {
+              setPlaceName(e.target.value);
+              setPlaceId(null);
+              setShowSuggestions(true);
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
+            placeholder="e.g. Caffe Nero"
+            autoComplete="off"
+          />
+          {showSuggestions && suggestions.length > 0 && (
+            <ul className="absolute z-20 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              {suggestions.map((p) => (
+                <li key={p.placeId}>
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-2.5 hover:bg-amber-50 transition-colors"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setPlaceName(p.placeName);
+                      setPlaceId(p.placeId);
+                      setLat(p.lat);
+                      setLng(p.lng);
+                      setShowSuggestions(false);
+                    }}
+                  >
+                    <span className="font-medium text-stone-800">{p.placeName}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* Description */}
