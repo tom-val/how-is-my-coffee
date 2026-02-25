@@ -1,5 +1,5 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamo, TABLE_NAME } from '../lib/dynamo.js';
 import { ok, badRequest, serverError } from '../lib/response.js';
 import { getPhotoUrl } from '../lib/s3.js';
@@ -21,28 +21,58 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     // Timestamp-based cursor: ISO string of the last item's createdAt
     const cursor = qs.cursor || undefined;
 
-    // 1. Get friends list
-    const friendsResult = await dynamo.send(
-      new QueryCommand({
-        TableName: TABLE_NAME,
-        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-        ExpressionAttributeValues: {
-          ':pk': `USER#${userId}`,
-          ':sk': 'FRIEND#',
-        },
-      })
-    );
+    // 1. Get friends list and own profile in parallel
+    const [friendsResult, profileResult] = await Promise.all([
+      dynamo.send(
+        new QueryCommand({
+          TableName: TABLE_NAME,
+          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+          ExpressionAttributeValues: {
+            ':pk': `USER#${userId}`,
+            ':sk': 'FRIEND#',
+          },
+        })
+      ),
+      dynamo.send(
+        new GetCommand({
+          TableName: TABLE_NAME,
+          Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
+          ProjectionExpression: 'username, displayName',
+        })
+      ),
+    ]);
 
     const friends = friendsResult.Items || [];
-    if (friends.length === 0) {
+    const profile = profileResult.Item;
+
+    // Build list of users to fetch ratings from: self + friends
+    const feedUsers: { userId: string; username: string; displayName: string }[] = [];
+
+    if (profile) {
+      feedUsers.push({
+        userId,
+        username: profile.username as string,
+        displayName: profile.displayName as string,
+      });
+    }
+
+    for (const friend of friends) {
+      feedUsers.push({
+        userId: friend.friendUserId as string,
+        username: friend.friendUsername as string,
+        displayName: friend.friendDisplayName as string,
+      });
+    }
+
+    if (feedUsers.length === 0) {
       return ok({ ratings: [], likedRatingIds: [], nextCursor: null });
     }
 
-    // 2. Fetch each friend's ratings in parallel
+    // 2. Fetch each user's ratings in parallel
     // If cursor provided, only fetch ratings with SK < RATING#<cursor>
-    const friendRatingsPromises = friends.map(async (friend) => {
+    const ratingsPromises = feedUsers.map(async (feedUser) => {
       const expressionValues: Record<string, unknown> = {
-        ':pk': `USER#${friend.friendUserId}`,
+        ':pk': `USER#${feedUser.userId}`,
       };
 
       let keyCondition: string;
@@ -72,14 +102,13 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
         if (rating.photoKey) {
           rating.photoUrl = getPhotoUrl(rating.photoKey as string);
         }
-        // Attach friend info so the feed shows who rated
-        rating.username = friend.friendUsername;
-        rating.displayName = friend.friendDisplayName;
+        rating.username = feedUser.username;
+        rating.displayName = feedUser.displayName;
         return rating;
       });
     });
 
-    const allRatings = (await Promise.all(friendRatingsPromises)).flat();
+    const allRatings = (await Promise.all(ratingsPromises)).flat();
 
     // 3. Sort by createdAt descending (newest first)
     allRatings.sort((a, b) => {

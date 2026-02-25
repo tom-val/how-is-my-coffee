@@ -48,25 +48,61 @@ describe('getFeed handler', () => {
     expect(result.statusCode).toBe(400);
   });
 
-  it('returns empty feed when user has no friends', async () => {
-    // Friends query returns empty
+  it('returns own ratings when user has no friends', async () => {
+    // Friends query returns empty + profile query returns user
     mockSend.mockResolvedValueOnce({ Items: [] });
+    mockSend.mockResolvedValueOnce({
+      Item: { username: 'tomas', displayName: 'Tomas' },
+    });
+
+    // Own ratings
+    mockSend.mockResolvedValueOnce({
+      Items: [
+        {
+          PK: 'USER#user-1',
+          SK: 'RATING#2024-01-01',
+          ratingId: 'r1',
+          stars: 4,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          entityType: 'Rating',
+        },
+      ],
+    });
 
     const result = await handler(makeEvent({ 'x-user-id': 'user-1' }));
 
     expect(result.statusCode).toBe(200);
     const body = JSON.parse(result.body as string);
-    expect(body.ratings).toEqual([]);
-    expect(body.likedRatingIds).toEqual([]);
-    expect(body.nextCursor).toBeNull();
+    expect(body.ratings).toHaveLength(1);
+    expect(body.ratings[0].ratingId).toBe('r1');
+    expect(body.ratings[0].username).toBe('tomas');
   });
 
-  it('returns merged and sorted ratings from multiple friends', async () => {
+  it('returns merged and sorted ratings from self and friends', async () => {
     // Friends query
     mockSend.mockResolvedValueOnce({
       Items: [
         { friendUserId: 'friend-1', friendUsername: 'alice', friendDisplayName: 'Alice' },
         { friendUserId: 'friend-2', friendUsername: 'bob', friendDisplayName: 'Bob' },
+      ],
+    });
+
+    // Profile query
+    mockSend.mockResolvedValueOnce({
+      Item: { username: 'tomas', displayName: 'Tomas' },
+    });
+
+    // Own ratings (fetched first since self is first in feedUsers)
+    mockSend.mockResolvedValueOnce({
+      Items: [
+        {
+          PK: 'USER#user-1',
+          SK: 'RATING#2024-01-04',
+          ratingId: 'r4',
+          stars: 5,
+          createdAt: '2024-01-04T00:00:00.000Z',
+          entityType: 'Rating',
+        },
       ],
     });
 
@@ -112,15 +148,17 @@ describe('getFeed handler', () => {
     expect(result.statusCode).toBe(200);
     const body = JSON.parse(result.body as string);
 
-    // All 3 ratings, sorted newest first
-    expect(body.ratings).toHaveLength(3);
-    expect(body.ratings[0].ratingId).toBe('r3');
-    expect(body.ratings[0].username).toBe('alice');
-    expect(body.ratings[1].ratingId).toBe('r2');
-    expect(body.ratings[1].username).toBe('bob');
-    expect(body.ratings[1].photoUrl).toBe('/mocked/uploads/bob.jpg');
-    expect(body.ratings[2].ratingId).toBe('r1');
-    expect(body.ratings[2].username).toBe('alice');
+    // All 4 ratings, sorted newest first
+    expect(body.ratings).toHaveLength(4);
+    expect(body.ratings[0].ratingId).toBe('r4');
+    expect(body.ratings[0].username).toBe('tomas');
+    expect(body.ratings[1].ratingId).toBe('r3');
+    expect(body.ratings[1].username).toBe('alice');
+    expect(body.ratings[2].ratingId).toBe('r2');
+    expect(body.ratings[2].username).toBe('bob');
+    expect(body.ratings[2].photoUrl).toBe('/mocked/uploads/bob.jpg');
+    expect(body.ratings[3].ratingId).toBe('r1');
+    expect(body.ratings[3].username).toBe('alice');
 
     // DynamoDB internal fields stripped
     expect(body.ratings[0].PK).toBeUndefined();
@@ -134,6 +172,14 @@ describe('getFeed handler', () => {
         { friendUserId: 'friend-1', friendUsername: 'alice', friendDisplayName: 'Alice' },
       ],
     });
+
+    // Profile
+    mockSend.mockResolvedValueOnce({
+      Item: { username: 'tomas', displayName: 'Tomas' },
+    });
+
+    // Own ratings (empty)
+    mockSend.mockResolvedValueOnce({ Items: [] });
 
     // Return more items than the requested limit
     const items = Array.from({ length: 5 }, (_, i) => ({
@@ -154,5 +200,17 @@ describe('getFeed handler', () => {
     const body = JSON.parse(result.body as string);
     expect(body.ratings).toHaveLength(3);
     expect(body.nextCursor).toBe('2024-01-03T00:00:00.000Z');
+  });
+
+  it('returns empty feed when profile is not found and no friends', async () => {
+    mockSend.mockResolvedValueOnce({ Items: [] });
+    mockSend.mockResolvedValueOnce({ Item: undefined });
+
+    const result = await handler(makeEvent({ 'x-user-id': 'user-1' }));
+
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body as string);
+    expect(body.ratings).toEqual([]);
+    expect(body.nextCursor).toBeNull();
   });
 });
