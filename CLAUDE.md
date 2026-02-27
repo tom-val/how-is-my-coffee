@@ -7,7 +7,7 @@ A mobile-first coffee rating app. Users rate drinks at cafés, track caffeine in
 ```bash
 npm run setup          # install deps, start Docker, create DynamoDB tables
 npm run db:seed        # seed local DynamoDB with test data
-npm run dev            # start backend (3001) + frontend (5173) concurrently
+npm run dev            # start backend (3001) + frontend (7173) concurrently
 ```
 
 ## Tech Stack
@@ -93,7 +93,7 @@ Ratings are denormalised across three PK patterns (USER#, PLACE#, RATING#) via `
 |---|---|
 | `npm run dev` | Start backend + frontend concurrently |
 | `npm run dev:backend` | Backend only (tsx watch, port 3001) |
-| `npm run dev:frontend` | Frontend only (Vite, port 5173) |
+| `npm run dev:frontend` | Frontend only (Vite, port 7173) |
 | `npm run infra:up` | Start Docker Compose (DynamoDB + MinIO) |
 | `npm run infra:down` | Stop Docker Compose |
 | `npm run db:create-tables` | Create DynamoDB table locally |

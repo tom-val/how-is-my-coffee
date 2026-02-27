@@ -79,6 +79,22 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+  updateRating(ratingId: string, data: {
+    stars?: number;
+    drinkName?: string;
+    description?: string | null;
+    photoKey?: string | null;
+    caffeineMg?: number;
+    placeName?: string;
+    lat?: number;
+    lng?: number;
+    address?: string | null;
+  }) {
+    return request<{ ratingId: string; updatedAt: string }>(`/ratings/${ratingId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
   getUserRatings(userId: string, cursor?: string) {
     return request<PaginatedRatings>(withParams(`/users/${userId}/ratings`, { cursor }));
   },

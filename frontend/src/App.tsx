@@ -75,6 +75,7 @@ export default function App() {
               <Route path="/places" element={<PlacesPage />} />
               <Route path="/places/:placeId" element={<PlaceDetailPage />} />
               <Route path="/ratings/:ratingId" element={<RatingDetailPage />} />
+              <Route path="/ratings/:ratingId/edit" element={<NewRatingPage />} />
               <Route path="/friends" element={<FriendsPage />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>

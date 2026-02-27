@@ -97,16 +97,29 @@ export function RatingDetailPage() {
 
   return (
     <div className="p-4 pb-20">
-      {/* Back button */}
-      <button
-        onClick={() => navigate(-1)}
-        className="inline-flex items-center gap-1 text-sm text-amber-700 hover:text-amber-800 font-medium mb-4"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
-        Back
-      </button>
+      {/* Back + Edit buttons */}
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="inline-flex items-center gap-1 text-sm text-amber-700 hover:text-amber-800 font-medium"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
+        {rating.userId === user?.userId && (
+          <button
+            onClick={() => navigate(`/ratings/${ratingId}/edit`, { state: { rating } })}
+            className="inline-flex items-center gap-1 text-sm text-amber-700 hover:text-amber-800 font-medium"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+            </svg>
+            Edit
+          </button>
+        )}
+      </div>
 
       {/* Rating content */}
       <div className="bg-white rounded-xl shadow-sm border border-stone-100 overflow-hidden">

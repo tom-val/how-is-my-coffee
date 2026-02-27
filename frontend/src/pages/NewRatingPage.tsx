@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
@@ -7,6 +7,7 @@ import { useGeolocation } from '../hooks/useGeolocation';
 import { StarRating } from '../components/StarRating';
 import { resolveCaffeineMg } from '../lib/caffeine';
 import { resizeImage } from '../lib/resizeImage';
+import type { Rating } from '../types';
 
 async function forwardGeocode(query: string): Promise<{ lat: number; lng: number } | null> {
   try {
@@ -32,6 +33,23 @@ export function NewRatingPage() {
   const queryClient = useQueryClient();
   const geo = useGeolocation();
   const fileRef = useRef<HTMLInputElement>(null);
+  const location = useLocation();
+
+  // Edit mode: detected via ratingId route param
+  const { ratingId } = useParams<{ ratingId?: string }>();
+  const isEditMode = !!ratingId;
+
+  // Use router state for instant display of existing rating data
+  const stateRating = (location.state as { rating?: Rating } | null)?.rating;
+
+  // Fetch existing rating when in edit mode
+  const { data: ratingDetailData } = useQuery({
+    queryKey: ['ratingDetail', ratingId],
+    queryFn: () => api.getRatingDetail(ratingId!),
+    enabled: isEditMode && !!ratingId,
+  });
+
+  const existingRating = ratingDetailData?.rating || stateRating;
 
   const [stars, setStars] = useState(0);
   const [placeName, setPlaceName] = useState('');
@@ -54,18 +72,50 @@ export function NewRatingPage() {
   const [isGeocodingAddress, setIsGeocodingAddress] = useState(false);
   const [geocodeError, setGeocodeError] = useState('');
 
+  // Track whether form has been pre-populated from existing data (edit mode)
+  const isPrePopulatedRef = useRef(false);
+  // Track whether the user has manually changed the drink name (to guard caffeine auto-resolve)
+  const hasUserEditedDrinkNameRef = useRef(false);
+  // Track the existing photoKey for detecting removal
+  const existingPhotoKeyRef = useRef<string | undefined>(undefined);
+
   const effectiveLat = lat ?? geo.lat;
   const effectiveLng = lng ?? geo.lng;
   const hasCoordinates = effectiveLat !== null && effectiveLng !== null;
 
-  // Auto-detect GPS on mount
+  // Pre-populate form state when editing an existing rating
   useEffect(() => {
-    geo.getLocation();
+    if (!isEditMode || !existingRating || isPrePopulatedRef.current) return;
+    isPrePopulatedRef.current = true;
+
+    setStars(existingRating.stars);
+    setDrinkName(existingRating.drinkName || '');
+    setDescription(existingRating.description || '');
+    setPlaceName(existingRating.placeName);
+    setPlaceId(existingRating.placeId);
+    setLat(existingRating.lat);
+    setLng(existingRating.lng);
+    setCaffeineMg(existingRating.caffeineMg || 0);
+    existingPhotoKeyRef.current = existingRating.photoKey;
+
+    if (existingRating.photoUrl) {
+      setPhotoPreview(existingRating.photoUrl);
+    }
+  }, [isEditMode, existingRating]);
+
+  // Auto-detect GPS on mount (skip in edit mode — coordinates already known)
+  useEffect(() => {
+    if (!isEditMode) {
+      geo.getLocation();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isEditMode]);
 
   // Resolve caffeine from static list with debounce (~300ms after user stops typing)
+  // In edit mode, skip until the user has manually changed the drink name
   useEffect(() => {
+    if (isEditMode && !hasUserEditedDrinkNameRef.current) return;
+
     if (!drinkName.trim()) {
       setCaffeineMg(0);
       setCaffeineSource('static');
@@ -76,7 +126,7 @@ export function NewRatingPage() {
       setCaffeineSource('static');
     }, 300);
     return () => clearTimeout(timer);
-  }, [drinkName]);
+  }, [drinkName, isEditMode]);
 
   const handleAskAi = useCallback(async () => {
     if (!drinkName.trim() || isAiLoading) return;
@@ -132,9 +182,27 @@ export function NewRatingPage() {
 
   const mutation = useMutation({
     mutationFn: async () => {
-      let photoKey: string | undefined;
+      let photoKey: string | undefined | null;
       if (photo) {
+        // New photo uploaded
         photoKey = await api.uploadPhoto(photo);
+      } else if (isEditMode && !photoPreview && existingPhotoKeyRef.current) {
+        // User removed the existing photo
+        photoKey = null;
+      }
+      // else: photoKey is undefined — no change in edit mode, no photo in create mode
+
+      if (isEditMode) {
+        return api.updateRating(ratingId!, {
+          stars,
+          drinkName,
+          description: description || null,
+          photoKey,
+          caffeineMg,
+          placeName,
+          lat: effectiveLat ?? undefined,
+          lng: effectiveLng ?? undefined,
+        });
       }
 
       const finalLat = effectiveLat ?? 0;
@@ -147,7 +215,7 @@ export function NewRatingPage() {
         stars,
         drinkName,
         description: description || undefined,
-        photoKey,
+        photoKey: photoKey ?? undefined,
         lat: finalLat,
         lng: finalLng,
         caffeineMg,
@@ -156,17 +224,21 @@ export function NewRatingPage() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['userRatings', user?.userId] }),
-        queryClient.invalidateQueries({ queryKey: ['userRatingsCount', user?.userId] }),
-        queryClient.invalidateQueries({ queryKey: ['userPlaces', user?.userId] }),
         queryClient.invalidateQueries({ queryKey: ['feed'] }),
         queryClient.invalidateQueries({ queryKey: ['placeRatings'] }),
         queryClient.invalidateQueries({ queryKey: ['place'] }),
         queryClient.invalidateQueries({ queryKey: ['caffeineStats'] }),
+        ...(isEditMode
+          ? [queryClient.invalidateQueries({ queryKey: ['ratingDetail', ratingId] })]
+          : [
+              queryClient.invalidateQueries({ queryKey: ['userRatingsCount', user?.userId] }),
+              queryClient.invalidateQueries({ queryKey: ['userPlaces', user?.userId] }),
+            ]),
       ]);
-      navigate('/');
+      navigate(isEditMode ? `/ratings/${ratingId}` : '/');
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : 'Failed to create rating');
+      setError(err instanceof Error ? err.message : isEditMode ? 'Failed to update rating' : 'Failed to create rating');
     },
   });
 
@@ -198,9 +270,16 @@ export function NewRatingPage() {
     mutation.mutate();
   };
 
+  // Show loading state when in edit mode and data hasn't loaded yet
+  if (isEditMode && !existingRating && !isPrePopulatedRef.current) {
+    return <div className="p-4 text-center py-12 text-stone-400">Loading...</div>;
+  }
+
   return (
     <div className="p-4 pb-20">
-      <h1 className="text-xl font-bold text-stone-800 mb-6">Rate Your Coffee</h1>
+      <h1 className="text-xl font-bold text-stone-800 mb-6">
+        {isEditMode ? 'Edit Your Rating' : 'Rate Your Coffee'}
+      </h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Photo */}
@@ -233,7 +312,7 @@ export function NewRatingPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
               </svg>
-              <span className="text-sm">Add Photo</span>
+              <span className="text-sm">{isEditMode ? 'Change Photo' : 'Add Photo'}</span>
             </button>
           )}
         </div>
@@ -250,7 +329,10 @@ export function NewRatingPage() {
           <input
             type="text"
             value={drinkName}
-            onChange={(e) => setDrinkName(e.target.value)}
+            onChange={(e) => {
+              hasUserEditedDrinkNameRef.current = true;
+              setDrinkName(e.target.value);
+            }}
             className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
             placeholder="e.g. flat white, cappuccino, green tea"
             autoComplete="off"
@@ -294,7 +376,7 @@ export function NewRatingPage() {
                 Change
               </button>
             </div>
-          ) : geo.loading && !isEditingLocation ? (
+          ) : geo.loading && !isEditingLocation && !isEditMode ? (
             <div className="flex items-center gap-2 text-sm text-stone-500 bg-stone-50 px-3 py-2 rounded-lg">
               <svg className="w-4 h-4 animate-spin text-amber-600" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -304,7 +386,7 @@ export function NewRatingPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {geo.error && !isEditingLocation && (
+              {geo.error && !isEditingLocation && !isEditMode && (
                 <p className="text-amber-600 text-xs">GPS unavailable. Enter an address to look up coordinates.</p>
               )}
               {isEditingLocation && (
@@ -339,7 +421,7 @@ export function NewRatingPage() {
                   Cancel
                 </button>
               )}
-              {!isEditingLocation && !geo.error && (
+              {!isEditingLocation && !geo.error && !isEditMode && (
                 <button
                   type="button"
                   onClick={geo.getLocation}
@@ -360,7 +442,9 @@ export function NewRatingPage() {
             value={placeName}
             onChange={(e) => {
               setPlaceName(e.target.value);
-              setPlaceId(null);
+              if (!isEditMode) {
+                setPlaceId(null);
+              }
               setShowSuggestions(true);
             }}
             onFocus={() => setShowSuggestions(true)}
@@ -369,7 +453,7 @@ export function NewRatingPage() {
             placeholder="e.g. Caffe Nero"
             autoComplete="off"
           />
-          {showSuggestions && suggestions.length > 0 && (
+          {showSuggestions && suggestions.length > 0 && !isEditMode && (
             <ul className="absolute z-20 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
               {suggestions.map((p) => (
                 <li key={p.placeId}>
@@ -414,7 +498,9 @@ export function NewRatingPage() {
           disabled={mutation.isPending}
           className="w-full bg-amber-700 text-white py-3 rounded-lg font-medium hover:bg-amber-800 disabled:opacity-50 transition-colors"
         >
-          {mutation.isPending ? 'Saving...' : 'Save Rating'}
+          {mutation.isPending
+            ? (isEditMode ? 'Updating...' : 'Saving...')
+            : (isEditMode ? 'Update Rating' : 'Save Rating')}
         </button>
       </form>
     </div>

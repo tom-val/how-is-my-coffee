@@ -39,6 +39,14 @@ export function notFound(message: string): APIGatewayProxyResultV2 {
   };
 }
 
+export function forbidden(message: string): APIGatewayProxyResultV2 {
+  return {
+    statusCode: 403,
+    headers,
+    body: JSON.stringify({ error: message }),
+  };
+}
+
 export function serverError(err: unknown): APIGatewayProxyResultV2 {
   console.error('Server error:', err);
   return {

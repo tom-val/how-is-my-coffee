@@ -21,6 +21,7 @@ export interface Rating {
   lat: number;
   lng: number;
   createdAt: string;
+  updatedAt?: string;
   username?: string;
 }
 

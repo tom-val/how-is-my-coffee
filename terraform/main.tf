@@ -43,5 +43,6 @@ locals {
     toggleLike      = { method = "POST", route = "/api/ratings/{ratingId}/like" }
     getRatingDetail = { method = "GET", route = "/api/ratings/{ratingId}" }
     createComment   = { method = "POST", route = "/api/ratings/{ratingId}/comments" }
+    updateRating    = { method = "PUT", route = "/api/ratings/{ratingId}" }
   }
 }

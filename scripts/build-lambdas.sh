@@ -20,6 +20,7 @@ HANDLERS=(
   toggleLike
   getRatingDetail
   createComment
+  updateRating
 )
 
 DIST_DIR="dist/lambdas"

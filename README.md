@@ -31,7 +31,7 @@ npm run db:seed-large    # Large seed: 5 users, ~80 ratings (good for testing pa
 npm run dev
 ```
 
-The app will be available at **http://localhost:5173**.
+The app will be available at **http://localhost:7173**.
 
 ### Seed Data Credentials
 
@@ -203,7 +203,7 @@ coffee-app/
 |---|---|
 | `npm run dev` | Start both backend and frontend dev servers |
 | `npm run dev:backend` | Start backend only (port 3001) |
-| `npm run dev:frontend` | Start frontend only (port 5173) |
+| `npm run dev:frontend` | Start frontend only (port 7173) |
 | `npm run infra:up` | Start Docker containers (DynamoDB + MinIO) |
 | `npm run infra:down` | Stop Docker containers |
 | `npm run db:create-tables` | Create the DynamoDB table |
