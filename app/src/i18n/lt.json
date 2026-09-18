@@ -167,15 +167,19 @@
     "caffeineTotal": "Iš viso",
     "caffeineUnit": "mg",
     "ratingsEmpty": "Įvertinimų kol kas nėra.",
-    "settings": "Nustatymai",
+    "memberSince": "Prisijungė {{date}}",
+    "notFound": "Tokio vartotojo nėra."
+  },
+  "settings": {
+    "title": "Nustatymai",
     "language": "Kalba",
     "appearance": "Išvaizda",
     "appearanceSystem": "Sistemos",
     "appearanceLight": "Šviesi",
     "appearanceDark": "Tamsi",
     "appearanceRestart": "Perkraukite programėlę, kad pakeitimas įsigaliotų.",
-    "memberSince": "Prisijungė {{date}}",
-    "notFound": "Tokio vartotojo nėra."
+    "about": "Apie",
+    "version": "Versija"
   },
   "errors": {
     "network": "Nepavyksta pasiekti serverio. Patikrinkite ryšį ir bandykite dar kartą.",

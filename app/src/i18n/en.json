@@ -161,15 +161,19 @@
     "caffeineTotal": "All time",
     "caffeineUnit": "mg",
     "ratingsEmpty": "No ratings yet.",
-    "settings": "Settings",
+    "memberSince": "Joined {{date}}",
+    "notFound": "No such user."
+  },
+  "settings": {
+    "title": "Settings",
     "language": "Language",
     "appearance": "Appearance",
     "appearanceSystem": "System",
     "appearanceLight": "Light",
     "appearanceDark": "Dark",
     "appearanceRestart": "Restart the app to finish switching.",
-    "memberSince": "Joined {{date}}",
-    "notFound": "No such user."
+    "about": "About",
+    "version": "Version"
   },
   "errors": {
     "network": "No connection to the coffee shop. Check your network and try again.",

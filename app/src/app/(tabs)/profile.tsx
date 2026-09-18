@@ -9,42 +9,29 @@ import { Avatar } from '@/components/avatar';
 import { BrandHeader } from '@/components/brand-header';
 import { CaffeineStats } from '@/components/caffeine-stats';
 import { EmptyState } from '@/components/empty-state';
-import { CupIcon, PinIcon } from '@/components/icons';
+import { CupIcon, GearIcon, PinIcon } from '@/components/icons';
 import { PlaceRow } from '@/components/place-row';
 import { RatingCard } from '@/components/rating-card';
 import { SkeletonFeed, SkeletonRow } from '@/components/skeleton';
-import { Button, Divider, SectionTitle, SegmentedRow, Txt } from '@/components/ui';
-import { setLanguage, SUPPORTED, type Lang } from '@/i18n';
+import { Divider, IconButton, SegmentedRow, Txt } from '@/components/ui';
 import { api, errorMessage, PAGE_SIZE } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { confirmDestructive } from '@/lib/confirm';
 import { formatDate } from '@/lib/format';
 import { qk } from '@/lib/queryKeys';
-import { showToast } from '@/lib/toast';
 import { useToggleLike } from '@/lib/useToggleLike';
-import {
-  APPEARANCE_PREFERENCES,
-  colors,
-  radius,
-  setAppearancePreference,
-  spacing,
-  useAppearancePreference,
-  type AppearancePreference,
-} from '@/theme';
+import { colors, radius, spacing } from '@/theme';
 
 type Section = 'ratings' | 'places' | 'tagged';
 
 /**
- * Me: how much caffeine, what I rated, where I have been, who tagged me, and the two settings worth
- * having. One screen rather than a profile plus a settings page — there are exactly two preferences
- * and a sign-out button, which does not earn a route of its own.
+ * Me: how much caffeine, what I rated, where I have been, and who tagged me. Nothing but the
+ * person — the preferences and the sign-out button that used to be pinned under all of this now
+ * live behind the gear, on `/settings`, where a settings screen belongs.
  */
 export default function ProfileScreen() {
   const { t, i18n } = useTranslation();
-  const { me, signOut } = useAuth();
+  const { me } = useAuth();
   const router = useRouter();
-  const appearance = useAppearancePreference();
-
   const [section, setSection] = useState<Section>('ratings');
   const username = me?.username ?? '';
 
@@ -78,16 +65,21 @@ export default function ProfileScreen() {
     qk.feed(),
   ]);
 
-  const changeAppearance = async (value: AppearancePreference) => {
-    const outcome = await setAppearancePreference(value);
-    if (outcome === 'restart-required') showToast(t('profile.appearanceRestart'));
-  };
-
   if (!me) return <View style={s.screen} />;
 
   return (
     <SafeAreaView style={s.screen} edges={['top']}>
-      <BrandHeader title={t('tabs.profile')} />
+      <BrandHeader
+        title={t('tabs.profile')}
+        right={
+          <IconButton
+            onPress={() => router.push('/settings')}
+            accessibilityLabel={t('settings.title')}
+            tone="soft">
+            <GearIcon size={22} color={colors.inkSoft} />
+          </IconButton>
+        }
+      />
       <ScrollView contentContainerStyle={s.content}>
         <View style={s.header}>
           <Avatar name={me.displayName} seed={me.username} size={64} />
@@ -202,51 +194,6 @@ export default function ProfileScreen() {
           )
         ) : null}
 
-        <View style={s.settings}>
-          <SectionTitle>{t('profile.settings')}</SectionTitle>
-
-          <View style={s.setting}>
-            <Txt variant="label" tone="soft">
-              {t('profile.language')}
-            </Txt>
-            <SegmentedRow<Lang>
-              value={(SUPPORTED.find((l) => i18n.language.startsWith(l)) ?? 'en') as Lang}
-              onChange={(lang) => void setLanguage(lang)}
-              options={[
-                { value: 'en', label: 'English' },
-                { value: 'lt', label: 'Lietuvių' },
-              ]}
-            />
-          </View>
-
-          <View style={s.setting}>
-            <Txt variant="label" tone="soft">
-              {t('profile.appearance')}
-            </Txt>
-            <SegmentedRow<AppearancePreference>
-              value={appearance}
-              onChange={(value) => void changeAppearance(value)}
-              options={APPEARANCE_PREFERENCES.map((value) => ({
-                value,
-                label: t(
-                  value === 'system'
-                    ? 'profile.appearanceSystem'
-                    : value === 'light'
-                      ? 'profile.appearanceLight'
-                      : 'profile.appearanceDark',
-                ),
-              }))}
-            />
-          </View>
-
-          <Button
-            title={t('auth.signOut')}
-            variant="danger"
-            onPress={() =>
-              confirmDestructive(t('auth.signOutConfirm'), undefined, t('auth.signOut'), signOut)
-            }
-          />
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -267,6 +214,4 @@ const s = StyleSheet.create({
     overflow: 'hidden',
     paddingVertical: spacing.xs,
   },
-  settings: { gap: spacing.lg, marginTop: spacing.xl },
-  setting: { gap: spacing.sm },
 });

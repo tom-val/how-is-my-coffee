@@ -298,6 +298,22 @@ export function ExternalIcon({ size = 24, color = colors.primary }: IconProps) {
   );
 }
 
+/** Settings, from the Profile tab's header. A hub, a ring and eight teeth on the 24-grid. */
+export function GearIcon({ size = 24, color = colors.inkSoft }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={12} r={3} stroke={color} strokeWidth={STROKE} />
+      <Circle cx={12} cy={12} r={7.2} stroke={color} strokeWidth={STROKE} />
+      <Path
+        d="M19.2 12h2.1M17.09 6.91l1.49-1.49M12 4.8V2.7M6.91 6.91L5.42 5.42M4.8 12H2.7M6.91 17.09l-1.49 1.49M12 19.2v2.1M17.09 17.09l1.49 1.49"
+        stroke={color}
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
 /** The location crosshair on the place picker. */
 export function CrosshairIcon({ size = 24, color = colors.primary }: IconProps) {
   return (
