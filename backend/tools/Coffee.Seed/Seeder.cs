@@ -63,7 +63,8 @@ public static class Seeder
                     new AttributeDefinition(Attr.Gsi1Pk, ScalarAttributeType.S),
                     new AttributeDefinition(Attr.Gsi1Sk, ScalarAttributeType.S),
                 ],
-                // GSI1 exists for one query: username prefix search (the companion picker).
+                // GSI1 serves two queries: the username prefix search (the companion picker) and the
+                // places map (every PLACE#<id>/META row under GSI1PK="PLACE").
                 GlobalSecondaryIndexes =
                 [
                     new GlobalSecondaryIndex
@@ -139,7 +140,7 @@ public static class Seeder
 
         items.Add(Profile(TomasId, "tomas", "Tomas", PasswordHasher.Hash("coffee123"), 323, "2025-01-01T00:00:00.000Z"));
         items.Add(UsernameLookup(TomasId, "tomas"));
-        items.Add(Profile(LoverId, "coffee_lover", "Coffee Lover", LegacyScryptHash, 130, "2025-01-02T00:00:00.000Z"));
+        items.Add(Profile(LoverId, "coffee_lover", "Coffee Lover", LegacyScryptHash, 260, "2025-01-02T00:00:00.000Z"));
         items.Add(UsernameLookup(LoverId, "coffee_lover"));
 
         // tomas follows coffee_lover (and so appears in coffee_lover's followers).
@@ -166,6 +167,9 @@ public static class Seeder
 
         var nero = new SeedPlace("place_cafe_nero", "Caffe Nero", 54.6872, 25.2797, "Gedimino pr. 9, Vilnius");
         var vero = new SeedPlace("place_vero_cafe", "Vero Cafe", 54.6892, 25.2800, "Pilies g. 12, Vilnius");
+        // Deliberately ~5 km south-west of the other two, so a map viewport over the old town excludes it.
+        var crooked = new SeedPlace(
+            "place_crooked_nose", "Crooked Nose & Coffee Stories", 54.6444, 25.2440, "Vytenio g. 4, Vilnius");
 
         var ratings = new List<SeedRating>
         {
@@ -182,17 +186,22 @@ public static class Seeder
                     new SeedCompanion(LoverId, "coffee_lover", "Coffee Lover"),
                     new SeedCompanion(null, null, "Guest Anna"),
                 ]),
+            new("r5", LoverId, "coffee_lover", crooked, 4.5, "Filter Coffee", "Worth the walk out of the old town", 130,
+                "2025-02-05T11:00:00.000Z", []),
         };
 
         foreach (var rating in ratings) items.AddRange(rating.ToItems());
 
-        // Latest rating per user: Caffe Nero → tomas 5 + coffee_lover 4 = 4.5 (2); Vero → 3.5 (1).
+        // Latest rating per user: Caffe Nero → tomas 5 + coffee_lover 4 = 4.5 (2); Vero → 3.5 (1);
+        // Crooked Nose → coffee_lover 4.5 (1).
         items.Add(nero.ToItem(4.5, 2));
         items.Add(vero.ToItem(3.5, 1));
+        items.Add(crooked.ToItem(4.5, 1));
 
         items.Add(UserPlace(TomasId, nero, "2025-02-01T08:00:00.000Z", 2));
         items.Add(UserPlace(TomasId, vero, "2025-01-15T10:30:00.000Z", 1));
         items.Add(UserPlace(LoverId, nero, "2025-01-20T14:00:00.000Z", 1));
+        items.Add(UserPlace(LoverId, crooked, "2025-02-05T11:00:00.000Z", 1));
 
         foreach (var item in items)
         {
@@ -258,6 +267,9 @@ public static class Seeder
             [Attr.AvgRating] = Av.N(avgRating),
             [Attr.RatingCount] = Av.N(ratingCount),
             [Attr.EntityType] = Av.S("Place"),
+            // Puts the place on the map query's GSI1 partition, exactly as a stats recompute would.
+            [Attr.Gsi1Pk] = Av.S(Keys.PlaceIndexPk),
+            [Attr.Gsi1Sk] = Av.S(PlaceId),
         };
     }
 

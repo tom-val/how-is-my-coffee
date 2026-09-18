@@ -22,6 +22,13 @@ public static class Keys
     /// <summary>GSI1 partition constant for the username prefix search (see <c>GET /v1/users/search</c>).</summary>
     public const string UsernameIndexPk = "USERNAME";
 
+    /// <summary>
+    /// GSI1 partition constant for the map / discovery query (see <c>GET /v1/places</c>). Every
+    /// <c>PLACE#&lt;id&gt;/META</c> row carries it with <c>GSI1SK = &lt;placeId&gt;</c>, which is what
+    /// turns "all cafés anyone has rated" into one query instead of a table scan.
+    /// </summary>
+    public const string PlaceIndexPk = "PLACE";
+
     public static string User(string userId) => $"USER#{userId}";
     public static string Rating(string ratingId) => $"RATING#{ratingId}";
     public static string Place(string placeId) => $"PLACE#{placeId}";

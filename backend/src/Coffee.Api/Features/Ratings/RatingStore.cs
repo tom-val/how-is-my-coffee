@@ -111,9 +111,18 @@ public sealed class RatingStore(CoffeeDb db)
         var count = latestByUser.Count;
         var average = count > 0 ? Math.Round(latestByUser.Values.Sum() / count, 1, MidpointRounding.AwayFromZero) : 0d;
 
+        // The GSI1 keys ride along with every stats recompute: places rated on the old Node stack have
+        // no index entry, so they self-heal (and become visible on the map) the next time anyone rates
+        // there. Writing them here covers the create, update and delete paths in one place.
         await db.UpdateAsync(Keys.Place(placeId), Keys.MetaSk,
-            "SET avgRating = :avg, ratingCount = :cnt",
-            new Dictionary<string, AttributeValue> { [":avg"] = Av.N(average), [":cnt"] = Av.N(count) }, ct);
+            "SET avgRating = :avg, ratingCount = :cnt, GSI1PK = :gsi1pk, GSI1SK = :gsi1sk",
+            new Dictionary<string, AttributeValue>
+            {
+                [":avg"] = Av.N(average),
+                [":cnt"] = Av.N(count),
+                [":gsi1pk"] = Av.S(Keys.PlaceIndexPk),
+                [":gsi1sk"] = Av.S(placeId),
+            }, ct);
     }
 
     /// <summary>Upserts the place row and the author's "places I've been" entry after a new rating.</summary>
@@ -137,7 +146,8 @@ public sealed class RatingStore(CoffeeDb db)
             }, ct);
 
         await db.UpdateAsync(Keys.Place(placeId), Keys.MetaSk,
-            "SET #n = :name, lat = :lat, lng = :lng, address = :addr, placeId = :pid, entityType = :et",
+            "SET #n = :name, lat = :lat, lng = :lng, address = :addr, placeId = :pid, entityType = :et, "
+            + "GSI1PK = :gsi1pk, GSI1SK = :gsi1sk",
             new Dictionary<string, AttributeValue>
             {
                 [":name"] = Av.S(placeName),
@@ -146,6 +156,8 @@ public sealed class RatingStore(CoffeeDb db)
                 [":addr"] = Av.S(address ?? string.Empty),
                 [":pid"] = Av.S(placeId),
                 [":et"] = Av.S("Place"),
+                [":gsi1pk"] = Av.S(Keys.PlaceIndexPk),
+                [":gsi1sk"] = Av.S(placeId),
             }, ct, new Dictionary<string, string> { ["#n"] = Attr.Name });
     }
 

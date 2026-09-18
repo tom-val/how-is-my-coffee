@@ -67,6 +67,9 @@ namespace Coffee.Api.Shared.Serialization;
 [JsonSerializable(typeof(LikeToggleDto))]
 // Places.
 [JsonSerializable(typeof(PlaceDto))]
+[JsonSerializable(typeof(MapPlaceDto))]
+[JsonSerializable(typeof(List<MapPlaceDto>))]
+[JsonSerializable(typeof(MapPlaceListDto))]
 // Caffeine.
 [JsonSerializable(typeof(ResolveCaffeineBody))]
 [JsonSerializable(typeof(ResolveCaffeineDto))]

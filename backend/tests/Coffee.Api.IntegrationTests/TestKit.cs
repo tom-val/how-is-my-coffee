@@ -51,17 +51,18 @@ public abstract class IntegrationTestBase(IntegrationFixture fixture)
             json.GetProperty("user").GetProperty("username").GetString()!);
     }
 
-    /// <summary>Creates a rating and returns its id.</summary>
+    /// <summary>Creates a rating and returns its id. The coordinates default to Vilnius old town; the
+    /// map tests override them so each one owns its own corner of the world.</summary>
     protected async Task<string> CreateRatingAsync(
         TestUser author, string placeId, string placeName, double stars, string drinkName,
-        int caffeineMg = 0, string companionsJson = "[]")
+        int caffeineMg = 0, string companionsJson = "[]", double lat = 54.6872, double lng = 25.2797)
     {
         var response = await Client(author.Token).PostAsync("/v1/ratings", Body($$"""
             {
               "placeId": "{{placeId}}", "placeName": "{{placeName}}",
-              "stars": {{stars.ToString(System.Globalization.CultureInfo.InvariantCulture)}},
+              "stars": {{Number(stars)}},
               "drinkName": "{{drinkName}}", "caffeineMg": {{caffeineMg}},
-              "lat": 54.6872, "lng": 25.2797, "address": "Gedimino pr. 9",
+              "lat": {{Number(lat)}}, "lng": {{Number(lng)}}, "address": "Gedimino pr. 9",
               "companions": {{companionsJson}}
             }
             """));
@@ -69,6 +70,10 @@ public abstract class IntegrationTestBase(IntegrationFixture fixture)
         Assert.Equal(System.Net.HttpStatusCode.Created, response.StatusCode);
         return (await ReadJsonAsync(response)).GetProperty("ratingId").GetString()!;
     }
+
+    /// <summary>JSON numbers are culture-free; a Lithuanian dev machine would otherwise emit "4,5".</summary>
+    protected static string Number(double value) =>
+        value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     protected static IEnumerable<string> RatingIds(JsonElement page) =>
         page.GetProperty("ratings").EnumerateArray().Select(r => r.GetProperty("ratingId").GetString()!);

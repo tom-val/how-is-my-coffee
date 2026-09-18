@@ -103,8 +103,13 @@ names are in `Shared/Data/Keys.cs`. Two additions:
 
 - `TAGGED#<createdAt>#<ratingId>` rows on a companion's partition, so "Coffees with me" and the feed
   are a query rather than a scan.
-- `GSI1` (`GSI1PK="USERNAME"`, `GSI1SK=<username>`) for the username prefix search.
+- `GSI1`, which carries two partitions:
+  - `GSI1PK="USERNAME"`, `GSI1SK=<username>` on the `USERNAME#` rows — the username prefix search.
+  - `GSI1PK="PLACE"`, `GSI1SK=<placeId>` on the `PLACE#<id>/META` rows — the map / discovery query
+    behind `GET /v1/places`, which reads that one small partition and filters the viewport in memory
+    instead of scanning the table.
 
-Existing `USERNAME#` rows written by the old backend have no `GSI1PK`/`GSI1SK`. Login backfills
-them (`if_not_exists`, so it is idempotent), so an account becomes searchable the first time its
-owner signs in on the new stack — no migration job.
+Rows written by the old backend have no `GSI1PK`/`GSI1SK`, and both partitions backfill themselves
+rather than needing a migration job: login backfills the `USERNAME#` row (`if_not_exists`, so it is
+idempotent), and `RatingStore.RecomputePlaceStatsAsync` rewrites the place keys on every create,
+edit and delete — so a café joins the map the next time anyone rates there.
