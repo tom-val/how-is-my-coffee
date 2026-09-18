@@ -1,10 +1,40 @@
-node_modules/
-dist/
-.env
-*.log
+# --- OS / editors ---
 .DS_Store
+*.log
+*.user
+*.suo
 
-# Terraform
-terraform/.terraform/
-terraform/terraform.tfstate*
+# --- Node / Expo (app/) ---
+node_modules/
+.expo/
+app/dist/
+app/web-build/
+# Prebuild output: native projects are generated, never committed (CNG).
+app/ios/
+app/android/
+
+# --- .NET (backend/) ---
+bin/
+obj/
+*.nupkg
+
+# --- Secrets / local config ---
+.env
+.env.*
+!.env.example
+
+# --- Terraform (infra/) ---
+.terraform/
+# .terraform.lock.hcl is deliberately NOT ignored: the provider lock is part of the config.
+*.tfstate
+*.tfstate.*
+crash.log
+# Real variable files hold keys; the checked-in example must survive.
 *.tfvars
+*.tfvars.json
+!*.example.tfvars
+
+# --- Build artefacts ---
+*.zip
+aot-out/
+dist/

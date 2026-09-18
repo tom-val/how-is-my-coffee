@@ -1,4 +1,4 @@
-# Rework plan: one .NET Native AOT Lambda + Expo (iOS / Android / Web)
+# Rework plan: Kavutė — one .NET Native AOT Lambda + Expo (iOS / Android / Web)
 
 Modelled on ../kindergarten (same author). Target layout:
 
@@ -19,3 +19,4 @@ Decisions (made so work can proceed without blocking):
 4. Old `frontend/`, `backend/` (TypeScript), `terraform/`, `scripts/` are deleted; root `package.json` workspace is gone (app has its own package.json; backend is dotnet).
 5. New feature: companions on a rating (registered users or guest names), `TAGGED#` rows, "Coffees with me" section, feed includes tagged ratings.
 6. Maps: no in-app map in v1 of the rewrite (Leaflet does not run on native). Places are searched via Nominatim + device location (expo-location); "Open in Maps" via Linking.
+7. Name: the app is **Kavutė** ("a quick coffee / coffee break"). ASCII `kavute` for slug, scheme, bundle id (`com.tomval.kavute`) and identifiers; the ė only in user-facing strings. "How is my coffee?" stays as the English tagline (lt: "Kaip mano kava?"). The GitHub repo and Terraform project name stay `how-is-my-coffee` / `coffee-app` so existing state and URLs are untouched.
