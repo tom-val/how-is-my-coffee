@@ -17,7 +17,8 @@
     "loading": "Kraunama…",
     "more": "Daugiau",
     "optional": "nebūtina",
-    "somethingWrong": "Kažkas nepavyko"
+    "somethingWrong": "Kažkas nepavyko",
+    "updating": "Atnaujinama…"
   },
   "auth": {
     "signIn": "Prisijungti",

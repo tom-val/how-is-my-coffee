@@ -17,7 +17,8 @@
     "loading": "Loading…",
     "more": "More",
     "optional": "optional",
-    "somethingWrong": "Something went wrong"
+    "somethingWrong": "Something went wrong",
+    "updating": "Updating…"
   },
   "auth": {
     "signIn": "Sign in",

@@ -22,7 +22,7 @@ on:
         required: true
         default: preview
         type: choice
-        options: [development, preview, production]
+        options: [preview, production]
 
 permissions:
   contents: read

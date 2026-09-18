@@ -108,3 +108,20 @@ Routes:
   `.env` (and to the build environment) when you want tiles.
 - **No EAS yet.** `app.json` deliberately has no `projectId`, `owner` or `updates.url`. Run
   `eas init` when the app is first linked to an EAS project.
+
+## Over-the-air updates (EAS Update)
+
+JS-only changes reach installed native builds without a store release. Publish manually from GitHub
+(**Actions → EAS Update (manual OTA)** → pick `preview` or `production`), or locally:
+
+```bash
+eas update --branch production --environment production --message "…"
+```
+
+On every cold start the app checks EAS for a newer bundle, downloads it and reloads into it before
+showing the first screen (`src/lib/startupUpdate.ts`; bounded by short timeouts, fails open to the
+cached bundle when offline). Only builds whose `runtimeVersion` matches receive an update — the
+policy is `appVersion`, so bump `expo.version` in `app.json` whenever native code or dependencies
+change and make a new build; pure JS/asset changes ship as updates against the same version.
+`eas update` bundles `EXPO_PUBLIC_*` from the EAS `production` environment, which `deploy.yml`
+keeps in sync with the deployed API URL. Expo Go and web ignore updates entirely.

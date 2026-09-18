@@ -1,0 +1,70 @@
+name: EAS Update (manual OTA)
+
+# Ships a JS-only over-the-air update to installed builds on the chosen channel — no native rebuild,
+# no build-quota use. Only builds that embed expo-updates (any build made from this repo) receive
+# it, and only builds whose runtimeVersion (= the app version in app.json) matches.
+#
+# The bundle always uses the PRODUCTION EXPO_PUBLIC_* values from the EAS "production" environment
+# (pushed there by deploy.yml after every deploy), whichever channel it is published to. The channel
+# only picks the audience: preview = internal builds, production = store builds.
+#
+# Installed apps pick the update up on their next cold start: the app checks, downloads and reloads
+# into it before showing the first screen (app/src/lib/startupUpdate.ts).
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Channel to publish to
+        required: true
+        default: preview
+        type: choice
+        options: [preview, production]
+      platform:
+        # Target one platform to leave the other untouched — e.g. publish android only while an iOS
+        # release is still in review. The runtimeVersion gate already fences off mismatched binaries.
+        description: Platform(s) to publish to
+        required: true
+        default: all
+        type: choice
+        options: [all, android, ios]
+      message:
+        description: Update message (shown in the EAS dashboard)
+        required: true
+        default: Manual OTA update
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eas-update-${{ inputs.channel }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: EAS Update (${{ inputs.channel }} / ${{ inputs.platform }})
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # eas-cli (installed as latest below) requires Node >= 22
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - working-directory: app
+        # --branch picks the OTA channel; --environment is always production so every update ships
+        # the prod EXPO_PUBLIC_* values (there is no separate dev backend).
+        run: |
+          npm ci
+          eas update \
+            --branch "${{ inputs.channel }}" \
+            --platform "${{ inputs.platform }}" \
+            --environment production \
+            --message "${{ inputs.message }}" \
+            --non-interactive

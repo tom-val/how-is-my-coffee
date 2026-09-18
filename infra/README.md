@@ -49,7 +49,8 @@ terraform plan            # TF_VAR_openai_api_key=... for the AI caffeine fallba
 | Secret | `AWS_ROLE_ARN` | yes | `deploy.yml` (all jobs) | OIDC role assumed to run Terraform, ship the Lambda zip, sync S3, invalidate CloudFront |
 | Secret | `OPENAI_API_KEY` | no | `deploy.yml` → `TF_VAR_openai_api_key` | `OpenAi__ApiKey` on the Lambda. Unset ⇒ `POST /v1/drinks/resolve-caffeine` still answers from the static table and returns `source: "error"` for unknown drinks |
 | Secret | `GOOGLE_PLACES_API_KEY` | no | `deploy.yml` → `TF_VAR_google_places_api_key` | `Google__PlacesApiKey` on the Lambda: café autocomplete via Places API (New), proxied by the API so the key never ships in the app. Unset ⇒ the picker falls back to Nominatim. Restrict the key to *Places API (New)* only and set a daily quota cap in Google Cloud |
-| Secret | `EXPO_TOKEN` | no | `eas-build.yml` | EAS CLI auth for native builds. Only needed once EAS is initialised |
+| Secret | `EXPO_TOKEN` | no | `eas-build.yml`, `eas-update.yml`, `deploy.yml` (eas-env) | EAS CLI auth for native builds, OTA updates and syncing `EXPO_PUBLIC_API_URL` into the EAS `production` environment |
+| Variable | `EAS_ENABLED` | no | `deploy.yml` (eas-env) | Set to `true` to run the EAS environment sync after each deploy (needs `EXPO_TOKEN`) |
 | Variable | `AWS_REGION` | no | `deploy.yml` | Region for the OIDC session; defaults to `eu-west-1` |
 | Environment | `Prod` | yes | `deploy-prod.yml` → `deploy.yml` | Holds the secrets above; add reviewers here to gate deploys |
 

@@ -136,3 +136,36 @@ jobs:
 
       - name: Print deployment URL
         run: echo "Deployed to ${{ needs.infra.outputs.web_url }}"
+
+  # 4. EAS environment -------------------------------------------------------
+  # Native builds (eas-build.yml) and OTA updates (eas-update.yml) bundle their EXPO_PUBLIC_* values
+  # from the EAS "production" environment, not from this repo, so keep it in step with what Terraform
+  # just deployed. Opt-in: the job is skipped until the EXPO_TOKEN secret exists (i.e. until EAS is
+  # in use), so a plain web deploy never needs an Expo account.
+  eas-env:
+    name: Sync EAS environment
+    needs: infra
+    if: ${{ vars.EAS_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Push EXPO_PUBLIC_* into EAS "production"
+        working-directory: app
+        # eas env:create evaluates the app config (which loads plugins), so deps must be installed.
+        # --force overwrites an existing value, which is the whole point after a redeploy.
+        run: |
+          npm ci
+          eas env:create --scope project --environment production \
+            --name EXPO_PUBLIC_API_URL \
+            --value "https://${{ needs.infra.outputs.cloudfront_domain }}" \
+            --visibility plaintext --type string --force --non-interactive

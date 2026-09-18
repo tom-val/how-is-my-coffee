@@ -25,7 +25,17 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "config": {
+        "googleMaps": {
+          "apiKey": ""
+        }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "output": "single",
@@ -69,7 +79,16 @@
     },
     "extra": {
       "router": {},
-      "note": "No EAS projectId / owner / updates.url here on purpose: this app has not been linked to an EAS project yet. Run `eas init` (and `eas update:configure` if OTA updates are wanted) to have the CLI add them."
+      "eas": {
+        "projectId": "862a20c9-d4f3-4c81-a791-5db00e8657b3"
+      }
+    },
+    "owner": "smikis",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/862a20c9-d4f3-4c81-a791-5db00e8657b3"
     }
   }
 }
