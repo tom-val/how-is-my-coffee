@@ -23,6 +23,12 @@
     <WarningsAsErrors>$(WarningsAsErrors);SYSLIB1031</WarningsAsErrors>
   </PropertyGroup>
 
+  <!-- Local-only secrets (Google:PlacesApiKey). Gitignored and copied next to the binary so a local
+       run picks it up, but never published: it must not end up inside a Lambda zip. -->
+  <ItemGroup>
+    <Content Update="appsettings.Local.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="Coffee.Api.Tests" />
     <InternalsVisibleTo Include="Coffee.Api.IntegrationTests" />

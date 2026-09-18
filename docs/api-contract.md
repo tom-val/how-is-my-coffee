@@ -118,6 +118,7 @@ so the web app and native apps can use the CloudFront origin as the API base.
   - The client turns `name` into `placeId = place_<snake_case(name)>` exactly as before; Google's id is not stored anywhere.
 - Config `Google:PlacesApiKey` (Lambda env `Google__PlacesApiKey`; local dev: `appsettings.Local.json`, gitignored). When unset, both endpoints answer
   `503 { "error": "place_search_unavailable" }` and the app falls back to Nominatim. Upstream failure / timeout (5 s) → `502 { "error": "place_search_failed" }`.
+- 400 codes: `invalid_session` (missing / non-UUID session), `invalid_query` (`q` > 100 chars), `invalid_location` (lat/lng out of range or only one given), `invalid_place_id` (id not matching `^[A-Za-z0-9_-]{10,200}$`). Validation runs before the 503 check.
 - Never log the key or the full upstream URL. Language: pass `languageCode` from the request's `Accept-Language` (first tag) when present.
 
 ### Caffeine

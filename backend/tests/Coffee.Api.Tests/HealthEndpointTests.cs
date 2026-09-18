@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
@@ -20,6 +21,11 @@ public sealed class TestAppFactory : WebApplicationFactory<Program>
         builder.UseSetting("Photos:Bucket", "coffee-app-photos");
         builder.UseSetting("Photos:ServiceUrl", "http://localhost:9000");
         builder.UseSetting("Photos:PublicBaseUrl", "http://localhost:9000/coffee-app-photos");
+        // appsettings.Local.json (gitignored, a real Google key on a developer machine) is added by
+        // Program.cs *after* the host settings, so it would win over UseSetting. Blank the key from a
+        // source of our own, appended last, so the suite can never call Google.
+        builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(
+            new Dictionary<string, string?> { ["Google:PlacesApiKey"] = "" }));
     }
 }
 

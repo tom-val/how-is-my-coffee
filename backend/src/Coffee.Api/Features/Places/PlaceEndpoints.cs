@@ -1,7 +1,9 @@
+using System.Text.RegularExpressions;
 using Amazon.DynamoDBv2.Model;
 using Coffee.Api.Features.Ratings;
 using Coffee.Api.Shared.Auth;
 using Coffee.Api.Shared.Data;
+using Coffee.Api.Shared.Places;
 using Coffee.Api.Shared.Serialization;
 using Coffee.Api.Shared.Storage;
 
@@ -16,14 +18,23 @@ public sealed record MapPlaceDto(
 
 public sealed record MapPlaceListDto(IReadOnlyList<MapPlaceDto> Places);
 
+// Google Places proxy. `googlePlaceId` is a round-trip handle only: the app resolves a suggestion,
+// then derives its own `place_<snake_case(name)>` id, so Google's id is never stored.
+public sealed record SuggestionDto(string GooglePlaceId, string Name, string Address);
+public sealed record SuggestionListDto(IReadOnlyList<SuggestionDto> Suggestions);
+public sealed record ResolvedPlaceDto(string Name, string Address, double Lat, double Lng);
+
 /// <summary>
 /// Cafés. A place row is created implicitly by the first rating there — there is no "add a place"
 /// endpoint, and <c>avgRating</c> is maintained by <c>RatingStore.RecomputePlaceStatsAsync</c>.
 /// </summary>
-public static class PlaceEndpoints
+public static partial class PlaceEndpoints
 {
     private const int DefaultMapLimit = 100;
     private const int MaxMapLimit = 300;
+    private const int MinQueryLength = 2;
+    private const int MaxQueryLength = 100;
+    private const int MaxSuggestions = 5;
 
     public static IEndpointRouteBuilder MapPlaceEndpoints(this IEndpointRouteBuilder app)
     {
@@ -80,6 +91,61 @@ public static class PlaceEndpoints
             return Results.Json(new MapPlaceListDto(results), ApiJsonSerializerContext.Default.MapPlaceListDto);
         });
 
+        // Google Places proxy — the key stays on this side. Both endpoints are listed before
+        // "/v1/places/{placeId}" for readability; routing prefers the literal "suggest" segment over
+        // the parameter whatever the order, and PlaceSuggestTests pins that down.
+        app.MapGet("/v1/places/suggest", async (
+            string? q, string? session, double? lat, double? lng,
+            AuthContext auth, IGooglePlacesClient google, HttpRequest request, CancellationToken ct) =>
+        {
+            if (!auth.TryRequireUser(out _, out var failure)) return failure;
+
+            // A malformed request is the caller's bug whether or not the proxy is configured, so the
+            // 400s come before the 503.
+            if (!TrySessionToken(session, out var sessionToken)) return ApiResults.BadRequest("invalid_session");
+            if (!AreCoordinatesValid(lat, lng)) return ApiResults.BadRequest("invalid_location");
+
+            var input = (q ?? string.Empty).Trim();
+            if (input.Length > MaxQueryLength) return ApiResults.BadRequest("invalid_query");
+
+            if (!google.IsConfigured) return PlaceSearchUnavailable();
+
+            // One character matches half the city — let the user keep typing rather than pay for it.
+            if (input.Length < MinQueryLength)
+                return Results.Json(new SuggestionListDto([]), ApiJsonSerializerContext.Default.SuggestionListDto);
+
+            var suggestions = await google.AutocompleteAsync(
+                input, sessionToken, lat, lng, PreferredLanguage(request), ct);
+            if (suggestions is null) return PlaceSearchFailed();
+
+            var dtos = suggestions
+                .Take(MaxSuggestions)
+                .Select(s => new SuggestionDto(s.GooglePlaceId, s.Name, s.Address))
+                .ToList();
+            return Results.Json(new SuggestionListDto(dtos), ApiJsonSerializerContext.Default.SuggestionListDto);
+        });
+
+        // Resolving a suggestion also closes the autocomplete session, so every keystroke that led
+        // here is billed once — which is why `session` is required on this call too.
+        app.MapGet("/v1/places/suggest/{googlePlaceId}", async (
+            string googlePlaceId, string? session,
+            AuthContext auth, IGooglePlacesClient google, HttpRequest request, CancellationToken ct) =>
+        {
+            if (!auth.TryRequireUser(out _, out var failure)) return failure;
+
+            if (!TrySessionToken(session, out var sessionToken)) return ApiResults.BadRequest("invalid_session");
+            if (!GooglePlaceIdPattern().IsMatch(googlePlaceId)) return ApiResults.BadRequest("invalid_place_id");
+
+            if (!google.IsConfigured) return PlaceSearchUnavailable();
+
+            var details = await google.GetDetailsAsync(googlePlaceId, sessionToken, PreferredLanguage(request), ct);
+            if (details is null) return PlaceSearchFailed();
+
+            return Results.Json(
+                new ResolvedPlaceDto(details.Name, details.Address, details.Lat, details.Lng),
+                ApiJsonSerializerContext.Default.ResolvedPlaceDto);
+        });
+
         app.MapGet("/v1/places/{placeId}", async (
             string placeId, AuthContext auth, CoffeeDb db, CancellationToken ct) =>
         {
@@ -129,6 +195,46 @@ public static class PlaceEndpoints
 
         return app;
     }
+
+    /// <summary>No key configured: the app falls back to Nominatim rather than showing an error.</summary>
+    private static IResult PlaceSearchUnavailable() =>
+        ApiResults.Error("place_search_unavailable", StatusCodes.Status503ServiceUnavailable);
+
+    /// <summary>Google answered badly, timed out, or not at all.</summary>
+    private static IResult PlaceSearchFailed() =>
+        ApiResults.Error("place_search_failed", StatusCodes.Status502BadGateway);
+
+    /// <summary>Google bills one autocomplete session per token, so it is required and must be the
+    /// UUID the app generates when the search box opens.</summary>
+    private static bool TrySessionToken(string? session, out string sessionToken)
+    {
+        sessionToken = session?.Trim() ?? string.Empty;
+        return Guid.TryParse(sessionToken, out _);
+    }
+
+    /// <summary>Both coordinates or neither. Half a centre is a client bug, and silently dropping the
+    /// 25 km bias would look like "Google is bad at this city".</summary>
+    private static bool AreCoordinatesValid(double? lat, double? lng)
+    {
+        if (lat is null && lng is null) return true;
+        if (lat is null || lng is null) return false;
+        return lat is >= -90 and <= 90 && lng is >= -180 and <= 180;
+    }
+
+    /// <summary>First tag of <c>Accept-Language</c> ("lt-LT,lt;q=0.9" → "lt-LT"), passed on as
+    /// <c>languageCode</c> so suggestions come back in the language the app is showing.</summary>
+    private static string? PreferredLanguage(HttpRequest request)
+    {
+        var header = request.Headers.AcceptLanguage.ToString();
+        if (string.IsNullOrWhiteSpace(header)) return null;
+
+        var tag = header.Split(',')[0].Split(';')[0].Trim();
+        return tag.Length is > 0 and <= 35 && tag != "*" ? tag : null;
+    }
+
+    /// <summary>Google's place ids are opaque; this only proves the value is safe in a URL path.</summary>
+    [GeneratedRegex("^[A-Za-z0-9_-]{10,200}$")]
+    private static partial Regex GooglePlaceIdPattern();
 
     /// <summary>Clamps <c>?limit=</c> to 1…300, defaulting to 100 — the map's own budget, not the feed's.</summary>
     private static int ParseMapLimit(int? limit) =>

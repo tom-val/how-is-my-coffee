@@ -92,9 +92,32 @@ Read through `IConfiguration`, so Lambda environment variables use `__` for the 
 | `Photos:AccessKey` / `Photos:SecretKey` | `minioadmin` | MinIO credentials — **dev only** |
 | `Photos:Region` | `eu-west-1` | Signing region for the S3 client |
 | `OpenAi:ApiKey` | *(unset)* | Caffeine fallback; unset logs a warning and unknown drinks resolve to `{0, "error"}` |
+| `Google:PlacesApiKey` | *(unset)* | Place search proxy; unset logs a warning and `/v1/places/suggest` answers `503 place_search_unavailable` |
 | `Cors:AllowedOrigins` | `[]` | Allowed origins in production; Development allows any origin |
 
 `appsettings.Development.json` holds the local values, including a throwaway JWT secret.
+Secrets that must not be committed go in `appsettings.Local.json` next to it — gitignored, optional,
+loaded last (so it wins over the other files) and never copied into a publish, so it cannot reach a
+Lambda zip:
+
+```json
+{ "Google": { "PlacesApiKey": "…" } }
+```
+
+## Google Places
+
+`GET /v1/places/suggest` and `GET /v1/places/suggest/{googlePlaceId}` proxy Places API (New)
+autocomplete and details, so the key stays on this side of the wire — it is never shipped to a phone
+or a browser, and never logged. `Shared/Places/GooglePlacesClient.cs` owns the two calls: they share
+one `sessionToken` (the app's UUID per search box), bias to a 25 km circle when the caller sends
+`lat`/`lng`, restrict the types to cafés and their neighbours, and ask details for the Essentials
+field mask only, so a whole type-ahead is billed as one session. The timeout is 5 s.
+
+The key comes from `Google:PlacesApiKey` (Lambda env var `Google__PlacesApiKey`; locally
+`appsettings.Local.json`). Behaviour without it is deliberate and part of the contract: both
+endpoints answer `503 { "error": "place_search_unavailable" }` and the app falls back to Nominatim.
+An upstream failure, timeout or unparseable answer is a different thing and answers
+`502 { "error": "place_search_failed" }`. The test hosts blank the key, so no test ever calls Google.
 
 ## DynamoDB
 

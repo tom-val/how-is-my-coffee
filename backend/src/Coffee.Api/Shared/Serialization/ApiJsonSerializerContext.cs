@@ -10,6 +10,7 @@ using Coffee.Api.Features.Ratings;
 using Coffee.Api.Features.Users;
 using Coffee.Api.Shared.Auth;
 using Coffee.Api.Shared.Caffeine;
+using Coffee.Api.Shared.Places;
 
 namespace Coffee.Api.Shared.Serialization;
 
@@ -70,6 +71,14 @@ namespace Coffee.Api.Shared.Serialization;
 [JsonSerializable(typeof(MapPlaceDto))]
 [JsonSerializable(typeof(List<MapPlaceDto>))]
 [JsonSerializable(typeof(MapPlaceListDto))]
+[JsonSerializable(typeof(SuggestionDto))]
+[JsonSerializable(typeof(List<SuggestionDto>))]
+[JsonSerializable(typeof(SuggestionListDto))]
+[JsonSerializable(typeof(ResolvedPlaceDto))]
+// Google Places (New) wire shapes — the proxy behind /v1/places/suggest.
+[JsonSerializable(typeof(GoogleAutocompleteRequest))]
+[JsonSerializable(typeof(GoogleAutocompleteResponse))]
+[JsonSerializable(typeof(GooglePlaceDetailsResponse))]
 // Caffeine.
 [JsonSerializable(typeof(ResolveCaffeineBody))]
 [JsonSerializable(typeof(ResolveCaffeineDto))]

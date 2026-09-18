@@ -17,10 +17,17 @@ using Coffee.Api.Shared.Auth;
 using Coffee.Api.Shared.Caffeine;
 using Coffee.Api.Shared.Data;
 using Coffee.Api.Shared.Middleware;
+using Coffee.Api.Shared.Places;
 using Coffee.Api.Shared.Serialization;
 using Coffee.Api.Shared.Storage;
 
 var builder = WebApplication.CreateSlimBuilder(args);
+
+// Gitignored, optional, and last of the JSON sources so it wins: somewhere for local secrets
+// (Google:PlacesApiKey, OpenAi:ApiKey) that must not land in appsettings.Development.json. In
+// Lambda the same keys arrive as `Google__PlacesApiKey`-style environment variables.
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
+
 var isDevelopment = builder.Environment.IsDevelopment();
 
 // Structured JSON logging inside Lambda (queryable in CloudWatch); readable console in dev.
@@ -110,6 +117,12 @@ builder.Services.AddSingleton<ICaffeineAiResolver>(sp => new OpenAiCaffeineResol
     new HttpClient { Timeout = OpenAiCaffeineResolver.Timeout },
     sp.GetRequiredService<IConfiguration>(),
     sp.GetRequiredService<ILogger<OpenAiCaffeineResolver>>()));
+
+// Same deal for the Google Places proxy: one client, its own 5 s budget.
+builder.Services.AddSingleton<IGooglePlacesClient>(sp => new GooglePlacesClient(
+    new HttpClient { Timeout = GooglePlacesClient.Timeout },
+    sp.GetRequiredService<IConfiguration>(),
+    sp.GetRequiredService<ILogger<GooglePlacesClient>>()));
 
 var app = builder.Build();
 
