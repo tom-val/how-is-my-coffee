@@ -31,6 +31,9 @@ jobs:
   build:
     name: EAS build (${{ inputs.profile }} / ${{ inputs.platform }})
     runs-on: ubuntu-latest
+    # The EXPO_TOKEN secret is scoped to the Prod GitHub environment; without this line the job
+    # sees an empty secret and eas-cli asks for a login.
+    environment: Prod
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
