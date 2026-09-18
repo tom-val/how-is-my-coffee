@@ -18,8 +18,10 @@ import type {
   Follower,
   Friend,
   MapPlace,
+  NotificationPrefs,
   Place,
   PlaceSuggestionDto,
+  PushPlatform,
   ResolvedPlace,
   Rating,
   RatingDetail,
@@ -280,6 +282,30 @@ export const api = {
     request<CaffeineResolution>('/v1/drinks/resolve-caffeine', {
       method: 'POST',
       body: JSON.stringify({ drinkName }),
+    }),
+
+  // ── push notifications ────────────────────────────────────────────────────
+  /** Upsert this device's Expo push token. Idempotent — see `lib/push.ts`. */
+  registerPushToken: (body: { token: string; platform: PushPlatform }) =>
+    request<{ status: string }>('/v1/push/tokens', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+
+  /** Forget this device on sign-out, so the next user here gets none of the previous one's pushes. */
+  deletePushToken: (token: string) =>
+    request<{ status: string }>(`/v1/push/tokens/${encodeURIComponent(token)}`, {
+      method: 'DELETE',
+    }),
+
+  /** The five per-type switches. Anything the server has never stored comes back `true`. */
+  getNotificationPrefs: () => request<NotificationPrefs>('/v1/notification-prefs'),
+
+  /** Any subset of the five; the response is the full, updated set. */
+  updateNotificationPrefs: (body: Partial<NotificationPrefs>) =>
+    request<NotificationPrefs>('/v1/notification-prefs', {
+      method: 'PUT',
+      body: JSON.stringify(body),
     }),
 
   // ── photos ────────────────────────────────────────────────────────────────

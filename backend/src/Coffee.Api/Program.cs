@@ -10,6 +10,7 @@ using Coffee.Api.Features.Friends;
 using Coffee.Api.Features.Health;
 using Coffee.Api.Features.Photos;
 using Coffee.Api.Features.Places;
+using Coffee.Api.Features.Push;
 using Coffee.Api.Features.Ratings;
 using Coffee.Api.Features.Users;
 using Coffee.Api.Shared;
@@ -18,6 +19,7 @@ using Coffee.Api.Shared.Caffeine;
 using Coffee.Api.Shared.Data;
 using Coffee.Api.Shared.Middleware;
 using Coffee.Api.Shared.Places;
+using Coffee.Api.Shared.Push;
 using Coffee.Api.Shared.Serialization;
 using Coffee.Api.Shared.Storage;
 
@@ -124,6 +126,14 @@ builder.Services.AddSingleton<IGooglePlacesClient>(sp => new GooglePlacesClient(
     sp.GetRequiredService<IConfiguration>(),
     sp.GetRequiredService<ILogger<GooglePlacesClient>>()));
 
+// And again for Expo push. `Push:Enabled=false` still builds both, but the notifier never calls the
+// sender — the switch lives there so a disabled host does no DynamoDB reads either.
+builder.Services.AddSingleton<IPushSender>(sp => new ExpoPushSender(
+    new HttpClient { Timeout = ExpoPushSender.Timeout },
+    sp.GetRequiredService<IConfiguration>(),
+    sp.GetRequiredService<ILogger<ExpoPushSender>>()));
+builder.Services.AddSingleton<Notifier>();
+
 var app = builder.Build();
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
@@ -139,6 +149,7 @@ app.MapPlaceEndpoints();
 app.MapFeedEndpoints();
 app.MapCaffeineEndpoints();
 app.MapPhotoEndpoints();
+app.MapPushEndpoints();
 
 app.Run();
 

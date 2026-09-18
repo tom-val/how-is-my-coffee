@@ -1,6 +1,7 @@
 using Amazon.DynamoDBv2.Model;
 using Coffee.Api.Shared.Auth;
 using Coffee.Api.Shared.Data;
+using Coffee.Api.Shared.Push;
 using Coffee.Api.Shared.Serialization;
 
 namespace Coffee.Api.Features.Friends;
@@ -50,7 +51,7 @@ public static class FriendEndpoints
 
         // Idempotent: following twice simply rewrites the same two rows.
         app.MapPost("/v1/friends", async (
-            AddFriendBody body, AuthContext auth, CoffeeDb db, CancellationToken ct) =>
+            AddFriendBody body, AuthContext auth, CoffeeDb db, Notifier notifier, CancellationToken ct) =>
         {
             if (!auth.TryRequireUser(out var userId, out var failure)) return failure;
 
@@ -61,6 +62,11 @@ public static class FriendEndpoints
             var friendUserId = await db.UserIdByUsernameAsync(normalized, ct);
             if (friendUserId is null) return ApiResults.NotFound("user_not_found");
             if (friendUserId == userId) return ApiResults.BadRequest("cannot_add_self");
+
+            // Whether this is a new follow decides whether they get a push; the rows themselves are
+            // rewritten either way, so re-adding stays idempotent.
+            var alreadyFollowing =
+                await db.GetAsync(Keys.User(userId), Keys.FriendSk(friendUserId), ct, Attr.Pk) is not null;
 
             var (friendUsername, friendDisplayName) = await db.IdentityAsync(friendUserId, ct);
             var (ownUsername, ownDisplayName) = await db.IdentityAsync(userId, ct);
@@ -87,6 +93,12 @@ public static class FriendEndpoints
                 [Attr.FollowedAt] = Av.S(now),
                 [Attr.EntityType] = Av.S("Follower"),
             }, ct);
+
+            if (!alreadyFollowing)
+            {
+                await notifier.FollowAsync(
+                    friendUserId, new NotificationActor(userId, ownUsername, ownDisplayName), ct);
+            }
 
             return Results.Json(
                 new FriendDto(friendUserId, friendUsername.Length > 0 ? friendUsername : normalized, friendDisplayName, now),

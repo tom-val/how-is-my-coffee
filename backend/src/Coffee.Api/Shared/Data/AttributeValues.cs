@@ -15,6 +15,7 @@ public static class Av
     public static AttributeValue N(int value) => new() { N = value.ToString(CultureInfo.InvariantCulture) };
     public static AttributeValue L(List<AttributeValue> items) => new() { L = items, IsLSet = true };
     public static AttributeValue M(Dictionary<string, AttributeValue> map) => new() { M = map, IsMSet = true };
+    public static AttributeValue Bool(bool value) => new() { BOOL = value, IsBOOLSet = true };
 
     /// <summary>A map entry that is simply skipped when the value is null/blank (DynamoDB rejects empty strings in keys, and the old backend dropped undefined attributes).</summary>
     public static void PutIfPresent(this Dictionary<string, AttributeValue> item, string name, string? value)
@@ -44,4 +45,12 @@ public static class ItemReader
 
     public static List<AttributeValue> List(this Dictionary<string, AttributeValue> item, string name) =>
         item.TryGetValue(name, out var v) && v.L is not null ? v.L : [];
+
+    public static Dictionary<string, AttributeValue>? Map(this Dictionary<string, AttributeValue> item, string name) =>
+        item.TryGetValue(name, out var v) && v.IsMSet && v.M is not null ? v.M : null;
+
+    /// <summary>A boolean attribute, or null when it is absent or stored as something else — which is
+    /// how "a notification preference that was never saved" stays distinguishable from "saved false".</summary>
+    public static bool? Flag(this Dictionary<string, AttributeValue> item, string name) =>
+        item.TryGetValue(name, out var v) && v.IsBOOLSet ? v.BOOL is true : null;
 }

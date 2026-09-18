@@ -72,6 +72,12 @@
         {
           "locationWhenInUsePermission": "Allow Kavutė to use your location to find the cafe you are in."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#6F4E37"
+        }
       ]
     ],
     "experiments": {
