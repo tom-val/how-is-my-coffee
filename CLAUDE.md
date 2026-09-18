@@ -1,145 +1,94 @@
-# Coffee App
+# Kavutė (how-is-my-coffee)
 
-A mobile-first coffee rating app. Users rate drinks at cafés, track caffeine intake, and follow friends' ratings.
+Coffee-rating app: rate drinks at cafés, track caffeine, follow friends, tag the people you drank
+with ("companions"). One Expo client (iOS / Android / Web) + one .NET 10 Native AOT Lambda over
+DynamoDB. Layout and conventions follow ../kindergarten (same author).
 
-## Quick Start
+## Quick start
 
 ```bash
-npm run setup          # install deps, start Docker, create DynamoDB tables
-npm run db:seed        # seed local DynamoDB with test data
-npm run dev            # start backend (3001) + frontend (7173) concurrently
+make infra   # DynamoDB Local :8000 + MinIO :9000/:9001
+make seed    # table CoffeeApp (+GSI1), bucket coffee-app-photos, demo users tomas / coffee_lover (coffee123)
+make api     # http://localhost:5090   (make api-lan → 0.0.0.0 for a phone on the LAN)
+make web     # Expo web :8081          (cd app && npm run ios | android for native)
+make test    # dotnet unit + integration tests (integration auto-skips without `make infra`)
 ```
 
-## Tech Stack
-
-- **Frontend:** React 19, Vite 7, TypeScript, TailwindCSS v4, TanStack Query v5, React Router v7
-- **Backend:** AWS Lambda (Node.js 20), Express adapter for local dev
-- **Database:** DynamoDB single-table design (table: `CoffeeApp`)
-- **Storage:** S3 (MinIO locally) for photo uploads
-- **Infrastructure:** Terraform (AWS provider 5.82.2), API Gateway HTTP API, CloudFront CDN
-- **Testing:** Vitest 3.0.5
-- **CI/CD:** GitHub Actions — CI on PRs (lint, type-check, test, build, terraform plan), CD on main (terraform apply, S3 sync, CloudFront invalidation)
-
-## Project Structure
+## Layout
 
 ```
-├── frontend/                 # React Vite SPA
-│   └── src/
-│       ├── api/client.ts     # API client with x-user-id auth header
-│       ├── components/       # BottomNav, RatingCard, StarRating
-│       ├── context/          # AuthContext (login state, localStorage persistence)
-│       ├── hooks/            # useAuth, useGeolocation, useIntersectionObserver, useToggleLike
-│       ├── lib/              # caffeine.ts (static lookup), resizeImage.ts
-│       ├── pages/            # 9 page components
-│       └── types/index.ts    # Shared frontend types
-├── backend/
-│   ├── local-server.ts       # Express adapter: maps req/res → Lambda event format
-│   ├── scripts/              # create-tables.ts, seed-data.ts, seed-large.ts
-│   └── src/
-│       ├── handlers/         # One Lambda handler per file + co-located .test.ts
-│       └── lib/              # dynamo, auth, response, s3, pagination, likes, openai
-├── terraform/                # AWS infrastructure (Lambda, API GW, DynamoDB, S3, CloudFront)
-├── scripts/build-lambdas.sh  # esbuild bundler → dist/lambdas/*.zip
-└── docker-compose.yml        # DynamoDB Local (8000), MinIO (9000/9001)
+app/                     Expo SDK app (expo-router). src/app = routes, src/features = screens,
+                         src/components = shared UI, src/lib/api.ts = the only place that calls the API,
+                         src/theme = light/dark tokens (palette.js), src/i18n = en + lt
+backend/Coffee.slnx
+backend/src/Coffee.Api/  Program.cs; Features/<Feature>/<Feature>Endpoints.cs (+ DTO records);
+                         Shared/{Auth,Data,Caffeine,Storage,Serialization,Middleware}
+backend/tests/           Coffee.Api.Tests (unit), Coffee.Api.IntegrationTests (DynamoDB Local + MinIO)
+backend/tools/Coffee.Seed/  creates table/bucket + demo data, idempotent
+infra/modules/{dynamodb,lambda,api-gateway,s3-web,s3-photos,cloudfront}, infra/environments/prod
+docs/api-contract.md     THE wire contract. Change it first, then both sides.
+.github/workflows/       pr-checks.yml, deploy.yml (reusable), deploy-prod.yml, eas-build.yml (manual)
 ```
 
-## Architecture
+## Backend rules (Native AOT — these break the publish, not the build)
 
-### Frontend
+- Every type that crosses the wire is registered in `Shared/Serialization/ApiJsonSerializerContext.cs`.
+  Return `Results.Json(dto, ApiJsonSerializerContext.Default.Dto, statusCode)` or the `ApiResults` helpers.
+  Never anonymous objects; `SYSLIB1031` is an error.
+- DynamoDB via the low-level client only: `Dictionary<string, AttributeValue>` built with the `Av`/`Attr`/`Keys`
+  helpers in `Shared/Data`. No document model, no object-persistence model, no reflection.
+- Endpoints resolve identity with `auth.TryRequireUser(out userId, out failure)`; public routes are
+  listed in the contract. The API mints and validates its own HS256 JWTs (`Shared/Auth/JwtIssuer`).
+- Keep DynamoDB attribute names as they are — production rows from the old Node stack must keep working.
+- Before pushing backend changes: `make test` and `make aot-check`.
 
-- **Routing:** React Router v7 with `ProtectedLayout` wrapper. Public route: `/u/:username`.
-- **State:** AuthContext for session (userId in localStorage + `x-user-id` header). TanStack Query for server state with cursor-based infinite queries.
-- **Styling:** TailwindCSS v4 (`@import "tailwindcss"` syntax). Mobile-first, max-width 500px. Colour palette: amber/stone/brown (#6F4E37).
-- **Hooks:** `useToggleLike` does optimistic updates across feed, userRatings, placeRatings, and ratingDetail query caches.
-- **API client:** `frontend/src/api/client.ts` — all methods, BASE_URL from `VITE_API_URL` env or `/api` (Vite proxies to backend).
+## App rules
 
-### Backend
+- All HTTP goes through `app/src/lib/api.ts`; types in `app/src/types/index.ts` mirror the contract DTOs.
+- Server state = TanStack Query (infinite queries keyed by cursor); like toggles update every cache
+  that holds the rating. Token lives in SecureStore (native) / localStorage (web) via `tokenStorage`.
+- Colours only through `@/theme` tokens (light + dark). Strings through i18n (`en` is the source, keep `lt` in step).
+- Web is a centered ≤500 px column; routes are deep-linkable (`/u/[username]`, `/rating/[id]`, `/place/[placeId]`).
+- Before pushing app changes: `cd app && npm run typecheck && npm run lint && npm run export:web`.
 
-- **Handler pattern:** Each handler is `async (event: APIGatewayProxyEventV2) => APIGatewayProxyResultV2`. Zod validates input. Response helpers: `ok()`, `created()`, `badRequest()`, `notFound()`, `serverError()`.
-- **Auth:** `x-user-id` header. Passwords hashed with scrypt + random salt in `lib/auth.ts`.
-- **Local dev:** `local-server.ts` adapts Express to Lambda event format — same handlers run locally and in AWS.
-- **OpenAI:** `lib/openai.ts` — `resolveWithAi()` estimates caffeine content via GPT-5 mini (15s timeout, graceful fallback to null).
+## Adding an endpoint
 
-### DynamoDB Single-Table Design
+1. Describe it in `docs/api-contract.md`.
+2. Backend: add DTO records + `[JsonSerializable]` entries, implement in the feature's `Map…Endpoints`, add tests.
+3. App: add the method to `src/lib/api.ts` and the type to `src/types`, then the screen.
+4. No Terraform change is needed — the `$default` route sends everything to the one Lambda.
 
-Table: `CoffeeApp` (PK + SK, PAY_PER_REQUEST)
+## DynamoDB single table `CoffeeApp` (PK + SK, PAY_PER_REQUEST, GSI1 on GSI1PK/GSI1SK)
 
 | Entity | PK | SK |
 |---|---|---|
 | User profile | `USER#<userId>` | `PROFILE` |
-| User rating | `USER#<userId>` | `RATING#<timestamp>#<ratingId>` |
+| User rating | `USER#<userId>` | `RATING#<createdAt>#<ratingId>` |
 | User place | `USER#<userId>` | `PLACE#<placeId>` |
-| Friend | `USER#<userId>` | `FRIEND#<friendUserId>` |
-| Follower | `USER#<userId>` | `FOLLOWER#<followerUserId>` |
-| Rating detail | `RATING#<ratingId>` | `META` |
-| Like | `RATING#<ratingId>` | `LIKE#<userId>` |
-| Comment | `RATING#<ratingId>` | `COMMENT#<timestamp>#<commentId>` |
-| Place detail | `PLACE#<placeId>` | `META` |
-| Place rating | `PLACE#<placeId>` | `RATING#<timestamp>#<ratingId>` |
-| Username lookup | `USERNAME#<username>` | `USERNAME` |
+| Friend / Follower | `USER#<userId>` | `FRIEND#<id>` / `FOLLOWER#<id>` |
+| Tagged as companion | `USER#<userId>` | `TAGGED#<createdAt>#<ratingId>` |
+| Rating detail / like / comment | `RATING#<ratingId>` | `META` / `LIKE#<userId>` / `COMMENT#<createdAt>#<commentId>` |
+| Place detail / place rating | `PLACE#<placeId>` | `META` / `RATING#<createdAt>#<ratingId>` |
+| Username lookup | `USERNAME#<username>` | `USERNAME` (+ `GSI1PK="USERNAME"`, `GSI1SK=<username>`) |
 
-Ratings are denormalised across three PK patterns (USER#, PLACE#, RATING#) via `TransactWrite` in `createRating`.
+Ratings are denormalised to USER#, PLACE# and RATING# via TransactWriteItems. Place stats use each
+user's latest rating. Companions are a list of `{ userId?, username?, displayName }` on every copy.
 
-### Infrastructure
+## Infra / deploy
 
-- **Lambda:** 16 handlers, esbuild-bundled to ESM, 256MB, 10s default timeout (20s for AI calls). Shared IAM role with DynamoDB + S3 permissions.
-- **API Gateway:** HTTP API (v2) with CORS. Routes map 1:1 to Lambda functions via Terraform `for_each`.
-- **CloudFront:** Serves frontend SPA from S3 (OAC), proxies `/api/*` to API Gateway, caches `/uploads/*` photos.
-- **State:** S3 backend + DynamoDB lock table for Terraform state.
-
-## Commands
-
-| Command | Description |
-|---|---|
-| `npm run dev` | Start backend + frontend concurrently |
-| `npm run dev:backend` | Backend only (tsx watch, port 3001) |
-| `npm run dev:frontend` | Frontend only (Vite, port 7173) |
-| `npm run infra:up` | Start Docker Compose (DynamoDB + MinIO) |
-| `npm run infra:down` | Stop Docker Compose |
-| `npm run db:create-tables` | Create DynamoDB table locally |
-| `npm run db:seed` | Seed test data (2 users, ratings, friends) |
-| `npm run db:seed-large` | Seed larger dataset for load testing |
-| `npm run test --workspace=backend` | Run all backend tests |
-| `npm run test:watch --workspace=backend` | Watch mode |
-| `npm run build --workspace=frontend` | Type-check + Vite build |
-| `npm run lint --workspace=frontend` | ESLint |
-| `bash scripts/build-lambdas.sh` | Bundle all Lambda handlers to dist/lambdas/*.zip |
-
-## Environment Variables
-
-Set in `.env` at project root (loaded by `dotenv/config` in `local-server.ts`):
-
-| Variable | Local Value | Purpose |
-|---|---|---|
-| `DYNAMODB_ENDPOINT` | `http://localhost:8000` | DynamoDB Local endpoint |
-| `S3_ENDPOINT` | `http://localhost:9000` | MinIO endpoint |
-| `S3_BUCKET` | `coffee-app-photos` | Photo storage bucket |
-| `S3_ACCESS_KEY` | `minioadmin` | MinIO access key |
-| `S3_SECRET_KEY` | `minioadmin` | MinIO secret key |
-| `S3_REGION` | `eu-west-1` | S3 region |
-| `AWS_REGION` | `eu-west-1` | DynamoDB region |
-| `OPENAI_API_KEY` | *(optional)* | For AI caffeine resolution |
-
-## Adding a New Endpoint
-
-1. **Handler:** Create `backend/src/handlers/<name>.ts` following existing patterns (Zod schema, response helpers).
-2. **Tests:** Create `backend/src/handlers/<name>.test.ts` with mocked DynamoDB calls.
-3. **Local server:** Import and register route in `backend/local-server.ts`.
-4. **Terraform:** Add entry to `locals.handlers` map in `terraform/main.tf`.
-5. **Build script:** Add handler name to `HANDLERS` array in `scripts/build-lambdas.sh`.
-6. **Frontend:** Add method to `frontend/src/api/client.ts`.
-
-## Seed Data
-
-- **tomas** (userId: `11111111-...`) — 3 ratings at 2 places
-- **coffee_lover** (userId: `22222222-...`) — 1 rating
-- They are friends with each other
+- Lambda code is shipped by CI (`update-function-code`); Terraform holds a placeholder zip with
+  `ignore_changes`, so `terraform apply` never reverts the running code.
+- AOT must be compiled inside `amazonlinux:2023` on arm64 (glibc); see `deploy.yml`.
+- `environments/prod/main.tf` ends with `moved` blocks that preserve the table, buckets, CloudFront
+  and the HTTP API from the pre-rework state. `prevent_destroy` guards the table and photos bucket.
+- Config reaches the Lambda as env vars with `__` (`Dynamo__TableName`, `Auth__JwtSecret`,
+  `Photos__Bucket`, `Photos__PublicBaseUrl`, `OpenAi__ApiKey`, `Cors__AllowedOrigins__0`).
+- GitHub: secret `AWS_ROLE_ARN` (required), `OPENAI_API_KEY`, `EXPO_TOKEN` (optional); environment `Prod` (the pre-existing one).
 
 ## Conventions
 
-- **Pagination:** Cursor-based (base64url-encoded JSON). Default 10, max 50 items.
-- **IDs:** UUIDs for users/ratings/comments. Place IDs: `place_<snake_case_name>`.
-- **Timestamps:** ISO 8601 strings.
-- **Error responses:** `{ error: string }` with appropriate HTTP status code.
-- **TailwindCSS v4:** Uses `@import "tailwindcss"` — not the older `@tailwind` directives.
-- **Leaflet:** CSS loaded from CDN in `index.html`, marker icons also from CDN.
+- Pagination: `?limit=&cursor=` (opaque base64url), default 10, max 50, response `nextCursor: string | null`.
+- Errors: `{ "error": "<snake_case_code or message>" }`; the app maps codes to i18n strings.
+- Timestamps ISO 8601 UTC; IDs are UUIDs; place IDs `place_<snake_case_name>`.
+- Name: the product is **Kavutė** (ASCII `kavute` in identifiers, slug, scheme, bundle id `com.tomval.kavute`).
+  Repo, Terraform project (`coffee-app`) and AWS resource names are unchanged on purpose.

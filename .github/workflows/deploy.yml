@@ -1,0 +1,171 @@
+name: Deploy (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub environment holding the secrets (e.g. Prod)
+        required: true
+        type: string
+      tf_dir:
+        description: Path to the Terraform environment
+        required: true
+        type: string
+
+permissions:
+  id-token: write # OIDC -> AWS
+  contents: read
+
+jobs:
+  # 1. Infrastructure --------------------------------------------------------
+  infra:
+    name: Terraform apply
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      api_function_name: ${{ steps.tf.outputs.api_function_name }}
+      api_endpoint: ${{ steps.tf.outputs.api_endpoint }}
+      web_bucket: ${{ steps.tf.outputs.web_bucket }}
+      photos_bucket: ${{ steps.tf.outputs.photos_bucket }}
+      cloudfront_distribution_id: ${{ steps.tf.outputs.cloudfront_distribution_id }}
+      cloudfront_domain: ${{ steps.tf.outputs.cloudfront_domain }}
+      web_url: ${{ steps.tf.outputs.web_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+      - uses: hashicorp/setup-terraform@v3
+      - name: Apply
+        id: tf
+        working-directory: ${{ inputs.tf_dir }}
+        env:
+          # Optional: without it the caffeine endpoint answers from the static table only.
+          TF_VAR_openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          TF_VAR_google_places_api_key: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+        run: |
+          terraform init -input=false
+          terraform apply -auto-approve -input=false
+          for o in api_function_name api_endpoint web_bucket photos_bucket \
+                   cloudfront_distribution_id cloudfront_domain web_url; do
+            echo "$o=$(terraform output -raw $o)" >> "$GITHUB_OUTPUT"
+          done
+
+  # 2. API Lambda (.NET Native AOT -> provided.al2023) -----------------------
+  api:
+    name: API (.NET Native AOT)
+    needs: infra
+    runs-on: ubuntu-24.04-arm # arm64 host with Docker; AOT is compiled inside an AL2023 container
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+
+      - name: Build Native AOT in Amazon Linux 2023 and package as bootstrap
+        run: |
+          # AOT links against the build host's glibc; the Ubuntu runner's is newer than AL2023's, so the
+          # binary must be compiled inside AL2023 or it fails with "GLIBC_2.xx not found" at runtime.
+          # libicu is only needed by the SDK/CLI (the app itself is InvariantGlobalization). provided.al2023
+          # runs a single native executable named `bootstrap`; we rename + zip *inside* the container too,
+          # because it writes as root and the runner can't rename root-owned files. api.zip (world-readable)
+          # lands in the workspace for the runner to ship.
+          docker run --rm -v "$PWD":/src -w /src amazonlinux:2023 bash -c '
+            set -e
+            dnf install -y -q clang zlib-devel tar gzip zip findutils libicu
+            curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/di.sh
+            bash /tmp/di.sh --channel 10.0 --install-dir /usr/share/dotnet
+            export PATH="$PATH:/usr/share/dotnet" DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
+            dotnet publish backend/src/Coffee.Api/Coffee.Api.csproj -c Release -r linux-arm64 -o /src/aot-out
+            mv /src/aot-out/Coffee.Api /src/aot-out/bootstrap
+            (cd /src/aot-out && zip -qj /src/api.zip bootstrap)
+          '
+
+      - name: Ship to Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ needs.infra.outputs.api_function_name }} \
+            --zip-file fileb://api.zip >/dev/null
+          aws lambda wait function-updated \
+            --function-name ${{ needs.infra.outputs.api_function_name }}
+
+      - name: Smoke test
+        run: |
+          # Hit API Gateway directly — CloudFront may not have picked up a brand-new origin yet.
+          API="${{ needs.infra.outputs.api_endpoint }}"
+          curl -fsS --retry 5 --retry-all-errors --retry-delay 5 "${API%/}/health"
+          echo
+
+  # 3. Web client -> S3 + CloudFront -----------------------------------------
+  web:
+    name: Web
+    needs: [infra, api]
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Build web
+        working-directory: app
+        env:
+          # Same origin as the site itself: CloudFront routes /v1/* and /health to API Gateway,
+          # so the browser never makes a cross-origin request.
+          EXPO_PUBLIC_API_URL: https://${{ needs.infra.outputs.cloudfront_domain }}
+        run: |
+          npm ci
+          npm run export:web
+
+      - name: Sync and invalidate
+        run: |
+          aws s3 sync app/dist "s3://${{ needs.infra.outputs.web_bucket }}" --delete
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ needs.infra.outputs.cloudfront_distribution_id }} \
+            --paths "/*" >/dev/null
+
+      - name: Print deployment URL
+        run: echo "Deployed to ${{ needs.infra.outputs.web_url }}"
+
+  # 4. EAS environment -------------------------------------------------------
+  # Native builds (eas-build.yml) and OTA updates (eas-update.yml) bundle their EXPO_PUBLIC_* values
+  # from the EAS "production" environment, not from this repo, so keep it in step with what Terraform
+  # just deployed. Opt-in: the job is skipped until the EXPO_TOKEN secret exists (i.e. until EAS is
+  # in use), so a plain web deploy never needs an Expo account.
+  eas-env:
+    name: Sync EAS environment
+    needs: infra
+    if: ${{ vars.EAS_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Push EXPO_PUBLIC_* into EAS "production"
+        working-directory: app
+        # eas env:create evaluates the app config (which loads plugins), so deps must be installed.
+        # --force overwrites an existing value, which is the whole point after a redeploy.
+        run: |
+          npm ci
+          eas env:create --scope project --environment production \
+            --name EXPO_PUBLIC_API_URL \
+            --value "https://${{ needs.infra.outputs.cloudfront_domain }}" \
+            --visibility plaintext --type string --force --non-interactive

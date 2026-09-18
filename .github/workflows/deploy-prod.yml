@@ -1,0 +1,25 @@
+name: Deploy prod
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A reusable workflow can't exceed its caller's permissions, so grant OIDC here too.
+permissions:
+  id-token: write
+  contents: read
+
+# Never cancel a deploy midway — a half-applied Terraform run or a shipped Lambda without its
+# matching web build is worse than queueing.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: Prod
+      tf_dir: infra/environments/prod
+    secrets: inherit

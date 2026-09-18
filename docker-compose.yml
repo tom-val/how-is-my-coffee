@@ -4,10 +4,14 @@ services:
     container_name: coffee-dynamodb
     ports:
       - "8000:8000"
+    # -sharedDb keeps every client on one database regardless of credentials; -inMemory means a
+    # restart is a clean slate (re-run `make seed`).
     command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
 
   minio:
-    image: minio/minio:latest
+    # MinIO's own registry rather than Docker Hub: anonymous `docker pull minio/minio` is rate
+    # limited and fails with a misleading "pull access denied".
+    image: quay.io/minio/minio:latest
     container_name: coffee-minio
     ports:
       - "9000:9000"
@@ -15,4 +19,12 @@ services:
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
+      # MinIO has no per-bucket CORS API; this is how the Expo web client is allowed to PUT photos
+      # straight to a presigned URL.
+      MINIO_API_CORS_ALLOW_ORIGIN: "*"
     command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
