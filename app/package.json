@@ -8,6 +8,7 @@
     "@tanstack/react-query": "^5.103.1",
     "expo": "~57.0.23",
     "expo-constants": "~57.0.18",
+    "expo-crypto": "~57.0.3",
     "expo-font": "~57.0.4",
     "expo-image": "~57.0.5",
     "expo-image-manipulator": "~57.0.18",
@@ -21,11 +22,14 @@
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
     "i18next": "^26.4.2",
+    "leaflet": "^1.9.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-i18next": "^17.0.14",
+    "react-leaflet": "^5.0.0",
     "react-native": "0.86.3",
     "react-native-gesture-handler": "~2.32.0",
+    "react-native-maps": "1.27.2",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
@@ -33,9 +37,11 @@
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.22",
     "@types/react": "~19.2.2",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~57.0.2",
+    "sharp": "^0.35.4",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -45,7 +51,8 @@
     "android": "expo start --android",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "export:web": "expo export --platform web"
+    "export:web": "expo export --platform web",
+    "icons": "node scripts/gen-icons.mjs"
   },
   "private": true
 }

@@ -14,16 +14,28 @@ import type { UserPlace } from '@/types';
  * maps app. Grouped rows with a hairline between them, not a stack of individual cards — a list of
  * twenty cafes as twenty shadowed boxes is noise.
  */
-export function PlaceRow({ place }: { place: UserPlace }) {
+export function PlaceRow({
+  place,
+  selected,
+  onPress,
+}: {
+  place: UserPlace;
+  /** Highlighted because its pin is the one tapped on the map above the list. */
+  selected?: boolean;
+  /** Overrides the default "open the place" navigation — the map screen selects instead. */
+  onPress?: () => void;
+}) {
   const router = useRouter();
   const { t, i18n } = useTranslation();
 
   return (
+    // No accessibilityRole on the row: on web that renders a <button>, and the Open-in-Maps control
+    // inside it is a button too — nested buttons are invalid HTML (React logs a hydration error).
     <Pressable
-      onPress={() => router.push(`/place/${place.placeId}`)}
-      accessibilityRole="button"
+      onPress={onPress ?? (() => router.push(`/place/${place.placeId}`))}
       accessibilityLabel={place.placeName}
-      style={({ pressed }) => [s.row, pressed && s.pressed]}>
+      accessibilityState={{ selected: !!selected }}
+      style={({ pressed }) => [s.row, selected && s.selected, pressed && s.pressed]}>
       <View style={s.icon}>
         <PinIcon size={18} color={colors.primary} />
       </View>
@@ -62,6 +74,7 @@ const s = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     minHeight: 60,
   },
+  selected: { backgroundColor: colors.primarySoft },
   icon: {
     width: 36,
     height: 36,

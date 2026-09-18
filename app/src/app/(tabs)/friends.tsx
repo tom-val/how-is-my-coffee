@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BrandHeader } from '@/components/brand-header';
 import { EmptyState } from '@/components/empty-state';
 import { PeopleIcon, SearchIcon } from '@/components/icons';
 import { SkeletonRow } from '@/components/skeleton';
@@ -86,11 +87,8 @@ export default function FriendsScreen() {
 
   return (
     <SafeAreaView style={s.screen} edges={['top']}>
+      <BrandHeader title={t('friends.title')} />
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-        <Txt variant="title" tone="heading">
-          {t('friends.title')}
-        </Txt>
-
         <TextField
           label={t('friends.add')}
           placeholder={t('friends.addPlaceholder')}

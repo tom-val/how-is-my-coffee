@@ -89,6 +89,44 @@ export interface Place {
   ratingCount: number;
 }
 
+/**
+ * A pin on the discovery map — `GET /v1/places?bbox=…`. Everyone's ratings, aggregated per cafe,
+ * with the two numbers that make it personal: how many of the people I follow have rated it, and
+ * whether I have been there myself.
+ */
+export interface MapPlace {
+  placeId: string;
+  name: string;
+  lat: number;
+  lng: number;
+  address?: string;
+  avgRating: number;
+  ratingCount: number;
+  /** People I follow who have rated here. Excludes me. */
+  friendCount: number;
+  visitedByMe: boolean;
+  myVisitCount: number;
+}
+
+/**
+ * One autocomplete hit from `GET /v1/places/suggest` — the API's proxy in front of Google Places.
+ * The Google key never reaches the client, and `googlePlaceId` is only a handle for the follow-up
+ * details call; nothing stores it.
+ */
+export interface PlaceSuggestionDto {
+  googlePlaceId: string;
+  name: string;
+  address?: string;
+}
+
+/** `GET /v1/places/suggest/{googlePlaceId}` — the coordinates behind a chosen suggestion. */
+export interface ResolvedPlace {
+  name: string;
+  address?: string;
+  lat: number;
+  lng: number;
+}
+
 /** A place someone has been to, as listed on a profile. */
 export interface UserPlace {
   placeId: string;

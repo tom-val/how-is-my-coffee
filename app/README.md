@@ -32,11 +32,12 @@ message rather than a blank screen.
 
 ## Environment
 
-Copy `.env.example` to `.env`. There is exactly one variable:
+Copy `.env.example` to `.env`:
 
 | Variable | Example | What it is |
 |---|---|---|
 | `EXPO_PUBLIC_API_URL` | `http://localhost:5090` | API base URL, no trailing slash, no `/v1`. In production this is the CloudFront domain, which forwards `/v1/*` to API Gateway. |
+| `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY` | *(empty)* | Google Maps key for the **Android** map. Optional — see Maps below. |
 
 `EXPO_PUBLIC_*` values are inlined into the bundle at build time, so this file holds nothing secret.
 
@@ -87,7 +88,23 @@ Routes:
 - **Caffeine.** The drink table is shipped in `src/lib/caffeine.ts` (a port of the old web client's,
   Lithuanian aliases included) so a known drink fills in with no round trip. Only an unknown drink
   asks `POST /v1/drinks/resolve-caffeine`, which has the AI fallback.
-- **Maps.** There is no in-app map. Places are found via Nominatim or the device's location, and
-  "Open in Maps" hands the coordinates to Apple Maps / the Android `geo:` intent / OpenStreetMap.
+- **Maps.** The Places tab is map-first: **Mine** pins the cafes you have rated, **Discover** asks
+  `GET /v1/places?bbox=…` for everything anyone has rated inside the current viewport (debounced
+  ~500 ms after the map stops moving, with the bbox rounded to three decimals so a small pan is a
+  cache hit). One component API, two engines, in `src/components/place-map/`:
+  `PlaceMap.tsx` uses **react-native-maps** — Apple Maps on iOS, Google Maps on Android — and
+  `PlaceMap.web.tsx` uses **Leaflet + react-leaflet** over OpenStreetMap tiles. Metro picks the file
+  per platform, so neither engine's code reaches the other bundle. Pins are drawn by us on both
+  sides (a `divIcon` on the web) so they share the theme's colours and dark mode; Leaflet's
+  stylesheet is injected as a `<link>` at runtime, the same trick `theme/css.js` uses for the
+  custom properties, because `web.output: "single"` means `+html.tsx` is never rendered.
+  Place search still goes through Nominatim, and "Open in Maps" still hands the coordinates to
+  Apple Maps / the Android `geo:` intent / OpenStreetMap for directions.
+- **The Android Maps key.** iOS and web need no key. Android's map is Google's and does:
+  `app.config.ts` extends `app.json` and sets `android.config.googleMaps.apiKey` from
+  `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY`. It is **empty by default**, which is a supported state —
+  the Android build runs and the pins draw, but over a blank tile background instead of real map
+  tiles. Nothing crashes. Add a "Maps SDK for Android" key from the Google Cloud console to your
+  `.env` (and to the build environment) when you want tiles.
 - **No EAS yet.** `app.json` deliberately has no `projectId`, `owner` or `updates.url`. Run
   `eas init` when the app is first linked to an EAS project.

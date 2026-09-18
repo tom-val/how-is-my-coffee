@@ -104,6 +104,19 @@
   "places": {
     "title": "Vietos",
     "myPlaces": "Mano vietos",
+    "mine": "Mano",
+    "discover": "Atrasti",
+    "friendsOnly": "Tik draugai",
+    "map": "Kavinių žemėlapis",
+    "locateMe": "Rodyti mane",
+    "visited": "Lankyta",
+    "friendCount_one": "{{count}} draugas",
+    "friendCount_few": "{{count}} draugai",
+    "friendCount_many": "{{count}} draugo",
+    "friendCount_other": "{{count}} draugų",
+    "nothingHere": "Čia nieko nėra",
+    "nothingHereBody": "Šioje žemėlapio dalyje kavinių dar niekas nevertino. Pastumkite arba atitolinkite.",
+    "nothingHereFriends": "Nė vienas iš sekamų žmonių čia dar nėra vertinęs kavinės.",
     "visits_one": "{{count}} apsilankymas",
     "visits_few": "{{count}} apsilankymai",
     "visits_many": "{{count}} apsilankymo",
@@ -117,6 +130,8 @@
     "previous": "Vietos, kuriose buvote",
     "searchResults": "Paieškos rezultatai",
     "noResults": "Nieko nerasta. Tiesiog įrašykite kavinės pavadinimą.",
+    "poweredByGoogle": "Paiešką teikia „Google“",
+    "searchFailed": "Nepavyko atidaryti šios vietos. Pabandykite kitą.",
     "emptyTitle": "Vietų kol kas nėra",
     "emptyBody": "Įvertinkite kavą kur nors — kavinė atsiras čia.",
     "ratingCount_one": "{{count}} įvertinimas",
@@ -173,6 +188,8 @@
     "user_not_found": "Tokio vartotojo nėra.",
     "cannot_tag_self": "Jūs jau esate savo kavoje.",
     "cannot_add_self": "Savęs sekti negalima.",
-    "configMissing": "Šioje versijoje nenurodytas API adresas (EXPO_PUBLIC_API_URL)."
+    "configMissing": "Šioje versijoje nenurodytas API adresas (EXPO_PUBLIC_API_URL).",
+    "place_search_unavailable": "Kavinių paieška šiame serveryje neįjungta.",
+    "place_search_failed": "Kavinių paieška neatsako. Pabandykite po akimirkos."
   }
 }

@@ -1,14 +1,14 @@
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BrandHeader } from '@/components/brand-header';
 import { RatingList } from '@/components/rating-list';
-import { Txt } from '@/components/ui';
 import { api, PAGE_SIZE } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { qk } from '@/lib/queryKeys';
-import { colors, spacing } from '@/theme';
+import { colors } from '@/theme';
 
 /**
  * The feed: my coffees, the coffees of people I follow, and coffees I was tagged in — newest first,
@@ -22,11 +22,7 @@ export default function FeedScreen() {
 
   return (
     <SafeAreaView style={s.screen} edges={['top']}>
-      <View style={s.bar}>
-        <Txt variant="title" tone="heading">
-          {t('feed.title')}
-        </Txt>
-      </View>
+      <BrandHeader title={t('feed.title')} />
       <RatingList
         queryKey={qk.feed()}
         fetchPage={(cursor) => api.feed({ cursor, limit: PAGE_SIZE })}
@@ -41,9 +37,4 @@ export default function FeedScreen() {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  bar: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
 });

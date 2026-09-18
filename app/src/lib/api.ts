@@ -17,7 +17,10 @@ import type {
   CreateRatingInput,
   Follower,
   Friend,
+  MapPlace,
   Place,
+  PlaceSuggestionDto,
+  ResolvedPlace,
   Rating,
   RatingDetail,
   RatingPage,
@@ -222,6 +225,50 @@ export const api = {
     }),
 
   // ── places ────────────────────────────────────────────────────────────────
+  /**
+   * Every cafe anyone has rated inside the map viewport.
+   *
+   * `bbox` is `minLng,minLat,maxLng,maxLat` (see `lib/geo.ts`, which rounds it so a small pan hits
+   * the cache instead of the network). `friends: true` narrows it to places the people I follow —
+   * or I — have rated. The server caps `limit` at 300 and keeps the most-rated places past that.
+   */
+  mapPlaces: (opts: { bbox: string; friends?: boolean; limit?: number }) => {
+    const params = new URLSearchParams({ bbox: opts.bbox });
+    if (opts.friends) params.set('friends', 'true');
+    if (opts.limit) params.set('limit', String(opts.limit));
+    return request<{ places: MapPlace[] }>(`/v1/places?${params.toString()}`);
+  },
+
+  /**
+   * Place autocomplete, proxied server-side so the Google key stays on the server.
+   *
+   * `session` is one UUID for a whole typing session plus the `resolveSuggestion` that ends it —
+   * Google bills the lot as a single session rather than per keystroke. `lat`/`lng` bias the
+   * results towards the user and are optional. Answers 503 `place_search_unavailable` when the
+   * server has no key configured, which is the caller's cue to fall back to Nominatim.
+   */
+  suggestPlaces: (
+    opts: { q: string; session: string; lat?: number; lng?: number },
+    signal?: AbortSignal,
+  ) => {
+    const params = new URLSearchParams({ q: opts.q, session: opts.session });
+    if (opts.lat !== undefined && opts.lng !== undefined) {
+      params.set('lat', String(opts.lat));
+      params.set('lng', String(opts.lng));
+    }
+    return request<{ suggestions: PlaceSuggestionDto[] }>(
+      `/v1/places/suggest?${params.toString()}`,
+      { signal },
+    );
+  },
+
+  /** The coordinates behind one suggestion. Pass the SAME `session` the suggestions came from. */
+  resolveSuggestion: (googlePlaceId: string, session: string, signal?: AbortSignal) =>
+    request<ResolvedPlace>(
+      `/v1/places/suggest/${encodeURIComponent(googlePlaceId)}?session=${encodeURIComponent(session)}`,
+      { signal },
+    ),
+
   place: (placeId: string) => request<Place>(`/v1/places/${encodeURIComponent(placeId)}`),
 
   placeRatings: (placeId: string, opts?: { limit?: number; cursor?: string | null }) =>

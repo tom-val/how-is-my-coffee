@@ -5,8 +5,9 @@ import { Txt } from './ui';
 import { colors, radius, spacing } from '@/theme';
 
 /**
- * The app's name, set in Fraunces next to its cup. Used on the auth screens and nowhere else — the
- * signed-in app never needs to tell you which app you are in.
+ * The app's name, set in Fraunces under its cup — the tall, centred version, for the auth screens
+ * where the name IS the page. The signed-in app shows the same mark laid out as a compact strip at
+ * the top of every tab; that one is `brand-header.tsx`.
  */
 export function Wordmark({ tagline }: { tagline?: string }) {
   return (

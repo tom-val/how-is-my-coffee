@@ -20,6 +20,11 @@ export const qk = {
   rating: (ratingId: string) => ['rating', ratingId] as const,
   place: (placeId: string) => ['place', placeId] as const,
   placeRatings: (placeId: string) => ['placeRatings', placeId] as const,
+  /**
+   * The discovery map's pins. `bbox` is the ROUNDED viewport string from `geo.bboxParam` — that is
+   * what makes panning a few metres a cache hit rather than a request.
+   */
+  mapPlaces: (bbox: string, friends: boolean) => ['mapPlaces', bbox, friends] as const,
 };
 
 /** Read-only key type — `unknown[]` is what `queryClient.setQueryData` wants. */

@@ -1,12 +1,13 @@
+import { randomUUID } from 'expo-crypto';
 import * as Location from 'expo-location';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { CrosshairIcon, PinIcon, SearchIcon } from './icons';
 import { Divider, Sheet, TextField, Txt } from './ui';
 import { placeIdFromName } from '@/lib/place';
-import { searchPlaces, type PlaceSuggestion } from '@/lib/nominatim';
+import { resolveHit, searchSuggestions, type SearchHit, type SearchSource } from '@/lib/placeSearch';
 import { showToast } from '@/lib/toast';
 import { useDebounced } from '@/lib/useDebounced';
 import { colors, radius, spacing } from '@/theme';
@@ -28,10 +29,16 @@ export type ChosenPlace = {
  *    counts against the same place rather than creating a near-duplicate.
  * 2. Where you are right now — a reverse geocode of the device position, which on a phone in a cafe
  *    is usually the cafe.
- * 3. A search — Nominatim, the same source the old web client used.
+ * 3. A search — Google Places through our own API (`GET /v1/places/suggest`, which holds the key
+ *    server-side), falling back to Nominatim when that endpoint is not configured.
+ *
+ * Google bills autocomplete per SESSION, not per keystroke, so one UUID is minted when this sheet
+ * opens, sent with every request, closed by the details call that resolves the chosen suggestion,
+ * and then thrown away. Typing is debounced and each new query aborts the one before it.
  *
  * Whatever is picked, the `placeId` is derived from the NAME (`place_<snake_case>`), never from
- * OSM's id: production data is keyed that way and must keep matching.
+ * Google's or OSM's id: production data is keyed that way and must keep matching, and neither
+ * third-party id is stored anywhere.
  */
 export function PlacePicker({
   visible,
@@ -48,28 +55,111 @@ export function PlacePicker({
   const [query, setQuery] = useState('');
   const debounced = useDebounced(query.trim(), 400);
   const [locating, setLocating] = useState(false);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
   // The results are stored WITH the query they answer, so "have we got results for what is typed
   // right now?" is a comparison rather than a second piece of state cleared from an effect.
-  const [found, setFound] = useState<{ query: string; items: PlaceSuggestion[] }>({
+  const [found, setFound] = useState<{ query: string; source: SearchSource; hits: SearchHit[] }>({
     query: '',
-    items: [],
+    source: 'nominatim',
+    hits: [],
   });
-  const results = found.query === debounced ? found.items : [];
+  const results = found.query === debounced ? found.hits : [];
   const searching = visible && debounced.length >= 2 && found.query !== debounced;
+
+  /**
+   * One Google autocomplete session for this sheet: minted on the first keystroke that needs it,
+   * reused for every later one, and closed by the details call in `pick`. Kept in a ref rather than
+   * state because nothing renders from it.
+   */
+  const session = useRef<string | null>(null);
+  const sessionToken = () => (session.current ??= randomUUID());
+  const endSession = () => {
+    session.current = null;
+  };
+
+  /**
+   * Where the user is, IF we already know — it biases the suggestions towards nearby cafes. Read
+   * from a permission we already hold; asking for one is what the "use my location" row is for.
+   */
+  const near = useRef<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    // Without a device position (web, or permission never granted) bias towards the place the user
+    // rated most recently — people mostly drink coffee in the same city. A real position, read
+    // below, overrides it.
+    if (!near.current && previousPlaces.length > 0) {
+      const latest = previousPlaces.reduce((a, b) => (b.lastVisited > a.lastVisited ? b : a));
+      if (Number.isFinite(latest.lat) && Number.isFinite(latest.lng)) {
+        near.current = { lat: latest.lat, lng: latest.lng };
+      }
+    }
+    void (async () => {
+      try {
+        const permission = await Location.getForegroundPermissionsAsync();
+        if (!permission.granted || cancelled) return;
+        const position = await Location.getLastKnownPositionAsync();
+        if (position && !cancelled) {
+          near.current = { lat: position.coords.latitude, lng: position.coords.longitude };
+        }
+      } catch {
+        // Biasing is a nicety; without it the search is merely less local.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, previousPlaces]);
 
   useEffect(() => {
     if (!visible || debounced.length < 2) return;
     const controller = new AbortController();
-    void searchPlaces(debounced, controller.signal).then((items) => {
-      if (!controller.signal.aborted) setFound({ query: debounced, items });
-    });
+    void searchSuggestions(debounced, sessionToken(), near.current, controller.signal).then(
+      (outcome) => {
+        if (!controller.signal.aborted) {
+          setFound({ query: debounced, source: outcome.source, hits: outcome.hits });
+        }
+      },
+    );
     return () => controller.abort();
   }, [debounced, visible]);
 
   const choose = (place: ChosenPlace) => {
     setQuery('');
+    endSession();
     onSelect(place);
     onClose();
+  };
+
+  const dismiss = () => {
+    endSession();
+    onClose();
+  };
+
+  /**
+   * A tapped suggestion. A Nominatim hit already has coordinates; a Google one needs the details
+   * call, which is also what closes the billing session — hence the brief spinner on the row.
+   */
+  const pick = async (hit: SearchHit) => {
+    if (resolvingId) return;
+    setResolvingId(hit.id);
+    try {
+      const resolved = await resolveHit(hit, sessionToken());
+      if (!resolved) {
+        showToast(t('places.searchFailed'));
+        return;
+      }
+      choose({
+        placeId: placeIdFromName(resolved.name),
+        placeName: resolved.name,
+        address: resolved.address,
+        lat: resolved.lat,
+        lng: resolved.lng,
+      });
+    } finally {
+      setResolvingId(null);
+    }
   };
 
   // Not a hook, despite what the name would have implied — hence `locateMe`.
@@ -86,6 +176,7 @@ export function PlacePicker({
         accuracy: Location.Accuracy.Balanced,
       });
       const { latitude, longitude } = position.coords;
+      near.current = { lat: latitude, lng: longitude };
       // The reverse geocode is a nicety: without it we still have coordinates, and the user can
       // type the cafe's name over whatever we guessed.
       const [address] = await Location.reverseGeocodeAsync({ latitude, longitude }).catch(() => []);
@@ -110,7 +201,7 @@ export function PlacePicker({
   );
 
   return (
-    <Sheet visible={visible} onClose={onClose} title={t('rating.place')}>
+    <Sheet visible={visible} onClose={dismiss} title={t('rating.place')}>
       <TextField
         placeholder={t('rating.placePlaceholder')}
         value={query}
@@ -187,21 +278,21 @@ export function PlacePicker({
                     <Row
                       title={r.name}
                       subtitle={r.address}
-                      onPress={() =>
-                        choose({
-                          placeId: placeIdFromName(r.name),
-                          placeName: r.name,
-                          address: r.address,
-                          lat: r.lat,
-                          lng: r.lng,
-                        })
-                      }
+                      busy={resolvingId === r.id}
+                      onPress={() => void pick(r)}
                     />
                     {i < results.length - 1 ? <Divider inset={spacing.lg + 32} /> : null}
                   </View>
                 ))
               )}
             </View>
+            {/* Google requires the attribution whenever its suggestions are shown without a Google
+                map alongside them. Nothing is required for the Nominatim fallback. */}
+            {found.source === 'google' && results.length > 0 ? (
+              <Txt variant="caption" tone="faint" style={s.attribution}>
+                {t('places.poweredByGoogle')}
+              </Txt>
+            ) : null}
           </>
         ) : null}
       </ScrollView>
@@ -212,10 +303,13 @@ export function PlacePicker({
 function Row({
   title,
   subtitle,
+  busy,
   onPress,
 }: {
   title: string;
   subtitle?: string;
+  /** The chosen Google suggestion, while its coordinates are being fetched. */
+  busy?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -223,8 +317,13 @@ function Row({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={title}
+      accessibilityState={{ busy: !!busy }}
       style={({ pressed }) => [s.row, pressed && s.pressed]}>
-      <PinIcon size={18} color={colors.inkFaint} />
+      {busy ? (
+        <ActivityIndicator size="small" color={colors.primary} />
+      ) : (
+        <PinIcon size={18} color={colors.inkFaint} />
+      )}
       <View style={s.rowText}>
         <Txt variant="headline" numberOfLines={1}>
           {title}
@@ -266,4 +365,5 @@ const s = StyleSheet.create({
   },
   rowText: { flex: 1 },
   status: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.lg },
+  attribution: { marginTop: spacing.xs, textAlign: 'right' },
 });

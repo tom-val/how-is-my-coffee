@@ -6,6 +6,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
+import { BrandHeader } from '@/components/brand-header';
 import { CaffeineStats } from '@/components/caffeine-stats';
 import { EmptyState } from '@/components/empty-state';
 import { CupIcon, PinIcon } from '@/components/icons';
@@ -86,6 +87,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={s.screen} edges={['top']}>
+      <BrandHeader title={t('tabs.profile')} />
       <ScrollView contentContainerStyle={s.content}>
         <View style={s.header}>
           <Avatar name={me.displayName} seed={me.username} size={64} />

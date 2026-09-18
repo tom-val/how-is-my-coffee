@@ -104,6 +104,17 @@
   "places": {
     "title": "Places",
     "myPlaces": "My places",
+    "mine": "Mine",
+    "discover": "Discover",
+    "friendsOnly": "Friends only",
+    "map": "Map of cafés",
+    "locateMe": "Centre on me",
+    "visited": "Visited",
+    "friendCount_one": "{{count}} friend",
+    "friendCount_other": "{{count}} friends",
+    "nothingHere": "Nothing in view",
+    "nothingHereBody": "No cafés have been rated in this part of the map. Pan around or zoom out.",
+    "nothingHereFriends": "None of the people you follow have rated a café around here yet.",
     "visits_one": "{{count}} visit",
     "visits_other": "{{count}} visits",
     "lastVisited": "Last visit {{date}}",
@@ -115,6 +126,8 @@
     "previous": "Places you have been",
     "searchResults": "Search results",
     "noResults": "Nothing found. Type the cafe name and keep going.",
+    "poweredByGoogle": "Powered by Google",
+    "searchFailed": "Could not open that place. Try another one.",
     "emptyTitle": "No places yet",
     "emptyBody": "Rate a coffee somewhere and the cafe lands here.",
     "ratingCount_one": "{{count}} rating",
@@ -169,6 +182,8 @@
     "user_not_found": "No user with that username.",
     "cannot_tag_self": "You are already on your own coffee.",
     "cannot_add_self": "You cannot follow yourself.",
-    "configMissing": "This build has no API address configured (EXPO_PUBLIC_API_URL)."
+    "configMissing": "This build has no API address configured (EXPO_PUBLIC_API_URL).",
+    "place_search_unavailable": "Cafe search is not set up on this server.",
+    "place_search_failed": "Cafe search is not answering. Try again in a moment."
   }
 }
