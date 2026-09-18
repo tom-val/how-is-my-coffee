@@ -18,6 +18,7 @@ public static class Keys
     public const string TaggedPrefix = "TAGGED#";
     public const string LikePrefix = "LIKE#";
     public const string CommentPrefix = "COMMENT#";
+    public const string PushPrefix = "PUSH#";
 
     /// <summary>GSI1 partition constant for the username prefix search (see <c>GET /v1/users/search</c>).</summary>
     public const string UsernameIndexPk = "USERNAME";
@@ -42,6 +43,9 @@ public static class Keys
     public static string FollowerSk(string followerUserId) => $"FOLLOWER#{followerUserId}";
     public static string LikeSk(string userId) => $"LIKE#{userId}";
     public static string CommentSk(string createdAt, string commentId) => $"COMMENT#{createdAt}#{commentId}";
+
+    /// <summary>One row per registered device; the Expo token is the sort key, so re-registering is an upsert.</summary>
+    public static string PushSk(string token) => $"PUSH#{token}";
 }
 
 /// <summary>Attribute names as written by the old Node handlers — do not rename.</summary>
@@ -90,6 +94,11 @@ public static class Attr
     public const string FollowerUsername = "followerUsername";
     public const string FollowerDisplayName = "followerDisplayName";
     public const string FollowedAt = "followedAt";
+
+    public const string Token = "token";
+    public const string Platform = "platform";
+    public const string LastSeenAt = "lastSeenAt";
+    public const string NotificationPrefs = "notificationPrefs";
 
     public const string AuthorUserId = "authorUserId";
     public const string CommentId = "commentId";

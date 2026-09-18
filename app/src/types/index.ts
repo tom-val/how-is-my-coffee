@@ -207,3 +207,23 @@ export interface UpdateRatingInput {
   address?: string | null;
   companions?: CompanionInput[];
 }
+
+/** Which push service this device's Expo token belongs to (`PUT /v1/push/tokens`). */
+export type PushPlatform = 'ios' | 'android';
+
+/**
+ * `GET/PUT /v1/notification-prefs`. Every type is ON until it is switched off — a pref missing
+ * server-side reads as `true`, so a new notification type is opt-out, not opt-in.
+ */
+export interface NotificationPrefs {
+  /** Someone tagged me as a companion on their rating. */
+  tagged: boolean;
+  /** Someone liked one of my ratings. */
+  like: boolean;
+  /** Someone commented on one of my ratings. */
+  comment: boolean;
+  /** Someone started following me. */
+  follow: boolean;
+  /** Someone I follow posted a rating. */
+  friendRating: boolean;
+}

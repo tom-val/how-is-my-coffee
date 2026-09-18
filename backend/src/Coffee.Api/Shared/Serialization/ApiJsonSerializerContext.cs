@@ -6,11 +6,13 @@ using Coffee.Api.Features.Friends;
 using Coffee.Api.Features.Health;
 using Coffee.Api.Features.Photos;
 using Coffee.Api.Features.Places;
+using Coffee.Api.Features.Push;
 using Coffee.Api.Features.Ratings;
 using Coffee.Api.Features.Users;
 using Coffee.Api.Shared.Auth;
 using Coffee.Api.Shared.Caffeine;
 using Coffee.Api.Shared.Places;
+using Coffee.Api.Shared.Push;
 
 namespace Coffee.Api.Shared.Serialization;
 
@@ -87,4 +89,11 @@ namespace Coffee.Api.Shared.Serialization;
 // Photos.
 [JsonSerializable(typeof(UploadUrlBody))]
 [JsonSerializable(typeof(UploadUrlDto))]
+// Push notifications: our own two bodies + the Expo Push API wire shapes.
+[JsonSerializable(typeof(RegisterPushTokenBody))]
+[JsonSerializable(typeof(NotificationPrefsPatch))]
+[JsonSerializable(typeof(NotificationPrefsDto))]
+[JsonSerializable(typeof(ExpoPushMessage))]
+[JsonSerializable(typeof(List<ExpoPushMessage>))]
+[JsonSerializable(typeof(ExpoPushResponse))]
 public partial class ApiJsonSerializerContext : JsonSerializerContext;

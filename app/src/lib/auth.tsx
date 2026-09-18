@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { api, setAuth, setUnauthorizedHandler } from './api';
+import { registerForPush, unregisterPush } from './push';
 import { clearToken, getToken, setToken } from './tokenStorage';
 import type { User } from '@/types';
 
@@ -23,12 +24,20 @@ type AuthValue = {
   signIn: (username: string, password: string) => Promise<void>;
   /** Throws `ApiError` on failure (409 `username_taken`); the screen localizes it. */
   signUp: (username: string, displayName: string, password: string) => Promise<void>;
+  /** Fire-and-forget: it drops this device's push token first, but callers need not wait. */
   signOut: () => void;
   /** Re-read `/me` — after creating a rating, say, so the caffeine total on the profile is current. */
   refresh: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
+
+/**
+ * How long sign-out waits for `DELETE /v1/push/tokens/{token}`. The delete has to go out while the
+ * JWT is still set, but an offline phone must still be able to sign out — so it is raced against
+ * this and the session is dropped either way.
+ */
+const SIGN_OUT_PUSH_BUDGET_MS = 1200;
 
 export function useAuth(): AuthValue {
   const ctx = useContext(AuthContext);
@@ -53,7 +62,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const callId = ++loadId.current;
     try {
       const user = await api.me();
-      if (callId === loadId.current) setMe(user);
+      if (callId === loadId.current) {
+        setMe(user);
+        // Cold start with a token we already had: this is the moment we know the session is real,
+        // so make sure the API still knows this device. No-op after the first success.
+        void registerForPush();
+      }
     } catch {
       // A 401 already triggered the unauthorized handler below; anything else (offline) leaves the
       // session intact and the screens show their own error state.
@@ -63,8 +77,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
     loadId.current++; // invalidate any in-flight /me so it cannot repopulate `me`
+    // Before the token goes, not after: the delete is authenticated. Bounded, and it never throws —
+    // a phone that cannot reach the API still signs out, it just keeps a stale token server-side
+    // (which the API drops on the first `DeviceNotRegistered` ticket anyway).
+    await Promise.race([
+      unregisterPush(),
+      new Promise<void>((resolve) => setTimeout(resolve, SIGN_OUT_PUSH_BUDGET_MS)),
+    ]);
     clearToken();
     setAuth(null);
     setTokenState(null);
@@ -95,6 +116,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setTokenState(result.token);
     setMe(result.user);
     setLoading(false);
+    // Fire-and-forget: a device that cannot produce a push token (simulator, Expo Go, permission
+    // denied) must still finish signing in. `push.ts` swallows everything.
+    void registerForPush();
   }, []);
 
   // Both let the ApiError through: only the screen has a `t` to localize it with, and only the

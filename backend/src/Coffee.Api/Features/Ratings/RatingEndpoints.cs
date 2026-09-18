@@ -3,6 +3,7 @@ using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
 using Coffee.Api.Shared.Auth;
 using Coffee.Api.Shared.Data;
+using Coffee.Api.Shared.Push;
 using Coffee.Api.Shared.Serialization;
 using Coffee.Api.Shared.Storage;
 
@@ -26,7 +27,7 @@ public static class RatingEndpoints
 
     private static async Task<IResult> CreateRatingAsync(
         CreateRatingBody body, AuthContext auth, CoffeeDb db, RatingStore store,
-        IPhotoStorage photos, CancellationToken ct)
+        IPhotoStorage photos, Notifier notifier, CancellationToken ct)
     {
         if (!auth.TryRequireUser(out var userId, out var failure)) return failure;
 
@@ -109,6 +110,16 @@ public static class RatingEndpoints
         await store.AdjustTotalCaffeineAsync(userId, caffeineMg, ct);
         await store.WriteTaggedRowsAsync(companions, ratingId, userId, createdAt, ct);
 
+        // Push last and awaited: Lambda freezes the moment this response is written, so there is no
+        // "after the return" to send in. The notifier owns its own 3 s budget and swallows failures,
+        // so the worst case is a slightly slower 201.
+        var actor = new NotificationActor(userId, username, displayName);
+        var notified = new NotificationRating(ratingId, drinkName, placeName, stars);
+        var followerIds = await notifier.FollowerIdsAsync(userId, ct);
+        await Task.WhenAll(
+            notifier.TaggedAsync(RegisteredCompanionIds(companions), actor, notified, ct),
+            notifier.FriendRatingAsync(followerIds, actor, notified, ct));
+
         return Results.Json(
             RatingMapper.ToDto(meta, photos, username, displayName),
             ApiJsonSerializerContext.Default.RatingDto,
@@ -163,7 +174,7 @@ public static class RatingEndpoints
 
     private static async Task<IResult> UpdateRatingAsync(
         string ratingId, HttpRequest request, AuthContext auth, CoffeeDb db, RatingStore store,
-        IPhotoStorage photos, CancellationToken ct)
+        IPhotoStorage photos, Notifier notifier, CancellationToken ct)
     {
         if (!auth.TryRequireUser(out var userId, out var failure)) return failure;
 
@@ -230,15 +241,32 @@ public static class RatingEndpoints
             }
         }
 
+        var newlyTagged = new List<string>();
         if (companions is not null)
         {
             // Replacing the list means the old tags must go, or a de-tagged user keeps seeing it.
             await store.RemoveTaggedRowsAsync(oldCompanions, ratingId, createdAt, ct);
             await store.WriteTaggedRowsAsync(companions, ratingId, userId, createdAt, ct);
+
+            // Only the people this edit *added* are notified — re-saving a rating must not push the
+            // same "had a coffee with you" at everyone who was already on it.
+            var before = oldCompanions.Select(c => c.UserId).Where(id => id is not null).ToHashSet(StringComparer.Ordinal);
+            newlyTagged = [.. RegisteredCompanionIds(companions).Where(id => !before.Contains(id))];
         }
 
         var updated = await db.GetAsync(Keys.Rating(ratingId), Keys.MetaSk, ct);
         var hydrated = await RatingMapper.HydrateAsync(db, photos, [updated ?? meta], ct);
+
+        if (newlyTagged.Count > 0)
+        {
+            var edited = hydrated[0];
+            await notifier.TaggedAsync(
+                newlyTagged,
+                new NotificationActor(userId, edited.Username, edited.DisplayName),
+                new NotificationRating(ratingId, edited.DrinkName, edited.PlaceName, edited.Stars),
+                ct);
+        }
+
         return Results.Json(hydrated[0], ApiJsonSerializerContext.Default.RatingDto);
     }
 
@@ -284,7 +312,8 @@ public static class RatingEndpoints
     }
 
     private static async Task<IResult> ToggleLikeAsync(
-        string ratingId, AuthContext auth, CoffeeDb db, RatingStore store, CancellationToken ct)
+        string ratingId, AuthContext auth, CoffeeDb db, RatingStore store, Notifier notifier,
+        CancellationToken ct)
     {
         if (!auth.TryRequireUser(out var userId, out var failure)) return failure;
 
@@ -319,13 +348,18 @@ public static class RatingEndpoints
         }, ct);
         await store.AdjustCountersAsync(ratingId, ownerUserId, placeId, createdAt, Attr.LikeCount, 1, ct);
 
+        // Only on the like, never on the unlike — and liking your own rating notifies nobody, which
+        // the notifier handles by excluding the actor from the recipients.
+        await notifier.LikeAsync(
+            ownerUserId, new NotificationActor(userId, username, displayName), Notified(ratingId, meta), ct);
+
         return Results.Json(
             new LikeToggleDto(true, currentCount + 1), ApiJsonSerializerContext.Default.LikeToggleDto);
     }
 
     private static async Task<IResult> CreateCommentAsync(
         string ratingId, CreateCommentBody body, AuthContext auth, CoffeeDb db, RatingStore store,
-        CancellationToken ct)
+        Notifier notifier, CancellationToken ct)
     {
         if (!auth.TryRequireUser(out var userId, out var failure)) return failure;
 
@@ -356,11 +390,27 @@ public static class RatingEndpoints
             ratingId, meta.StrOr(Attr.UserId, string.Empty), meta.StrOr(Attr.PlaceId, string.Empty),
             meta.StrOr(Attr.CreatedAt, string.Empty), Attr.CommentCount, 1, ct);
 
+        // Commenting on your own rating notifies nobody (the notifier drops the actor).
+        await notifier.CommentAsync(
+            meta.StrOr(Attr.UserId, string.Empty),
+            new NotificationActor(userId, username, displayName), Notified(ratingId, meta), text, ct);
+
         return Results.Json(
             new CommentDto(commentId, userId, username, displayName, text, createdAt),
             ApiJsonSerializerContext.Default.CommentDto,
             statusCode: StatusCodes.Status201Created);
     }
+
+    /// <summary>Companion ids worth notifying — guests have no account and no device.</summary>
+    private static List<string> RegisteredCompanionIds(IReadOnlyList<CompanionDto> companions) =>
+        [.. companions.Where(c => c.UserId is not null).Select(c => c.UserId!)];
+
+    /// <summary>The rating fields the push copy and the deep link need, straight off the META row.</summary>
+    private static NotificationRating Notified(string ratingId, Dictionary<string, AttributeValue> meta) => new(
+        ratingId,
+        meta.StrOr(Attr.DrinkName, string.Empty),
+        meta.StrOr(Attr.PlaceName, string.Empty),
+        meta.Num(Attr.Stars));
 
     internal static bool IsValidStars(double stars) =>
         stars is >= 1 and <= 5 && Math.Abs((stars * 2) - Math.Round(stars * 2)) < 1e-9;
