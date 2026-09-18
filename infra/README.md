@@ -50,7 +50,7 @@ terraform plan            # TF_VAR_openai_api_key=... for the AI caffeine fallba
 | Secret | `OPENAI_API_KEY` | no | `deploy.yml` → `TF_VAR_openai_api_key` | `OpenAi__ApiKey` on the Lambda. Unset ⇒ `POST /v1/drinks/resolve-caffeine` still answers from the static table and returns `source: "error"` for unknown drinks |
 | Secret | `EXPO_TOKEN` | no | `eas-build.yml` | EAS CLI auth for native builds. Only needed once EAS is initialised |
 | Variable | `AWS_REGION` | no | `deploy.yml` | Region for the OIDC session; defaults to `eu-west-1` |
-| Environment | `prod` | yes | `deploy-prod.yml` → `deploy.yml` | Holds the secrets above; add reviewers here to gate deploys |
+| Environment | `Prod` | yes | `deploy-prod.yml` → `deploy.yml` | Holds the secrets above; add reviewers here to gate deploys |
 
 The JWT signing secret is **not** a GitHub secret: `random_password` generates it in Terraform and
 it goes straight into the Lambda's environment. Rotating it (tainting the resource) signs everyone out.

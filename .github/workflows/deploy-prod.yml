@@ -20,6 +20,6 @@ jobs:
   deploy:
     uses: ./.github/workflows/deploy.yml
     with:
-      environment: prod
+      environment: Prod
       tf_dir: infra/environments/prod
     secrets: inherit

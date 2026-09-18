@@ -83,7 +83,7 @@ user's latest rating. Companions are a list of `{ userId?, username?, displayNam
   and the HTTP API from the pre-rework state. `prevent_destroy` guards the table and photos bucket.
 - Config reaches the Lambda as env vars with `__` (`Dynamo__TableName`, `Auth__JwtSecret`,
   `Photos__Bucket`, `Photos__PublicBaseUrl`, `OpenAi__ApiKey`, `Cors__AllowedOrigins__0`).
-- GitHub: secret `AWS_ROLE_ARN` (required), `OPENAI_API_KEY`, `EXPO_TOKEN` (optional); environment `prod`.
+- GitHub: secret `AWS_ROLE_ARN` (required), `OPENAI_API_KEY`, `EXPO_TOKEN` (optional); environment `Prod` (the pre-existing one).
 
 ## Conventions
 

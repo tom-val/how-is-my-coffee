@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       environment:
-        description: GitHub environment holding the secrets (e.g. prod)
+        description: GitHub environment holding the secrets (e.g. Prod)
         required: true
         type: string
       tf_dir:
