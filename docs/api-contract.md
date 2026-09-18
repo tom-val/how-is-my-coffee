@@ -1,8 +1,8 @@
 # Coffee API contract (v1)
 
 Single HTTP API served by ONE .NET 10 Native AOT Lambda (`coffee-api`) behind API Gateway HTTP API.
-Locally the same ASP.NET app runs with `dotnet run` on http://localhost:5080.
-All paths below are relative to the API base URL (`EXPO_PUBLIC_API_URL`), e.g. `http://localhost:5080/v1/feed`.
+Locally the same ASP.NET app runs with `dotnet run` on http://localhost:5090.
+All paths below are relative to the API base URL (`EXPO_PUBLIC_API_URL`), e.g. `http://localhost:5090/v1/feed`.
 In production the CloudFront distribution forwards `/v1/*` to API Gateway and `/uploads/*` to the photos bucket,
 so the web app and native apps can use the CloudFront origin as the API base.
 

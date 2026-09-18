@@ -1,0 +1,75 @@
+{
+  "expo": {
+    "name": "Kavutė",
+    "slug": "kavute",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "kavute",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tomval.kavute",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleAllowMixedLocalizations": true
+      }
+    },
+    "android": {
+      "package": "com.tomval.kavute",
+      "adaptiveIcon": {
+        "backgroundColor": "#F3E9DE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "output": "single",
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F3E9DE",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 140,
+          "dark": {
+            "backgroundColor": "#211A16",
+            "image": "./assets/splash-icon.png",
+            "imageWidth": 140
+          }
+        }
+      ],
+      "expo-font",
+      "expo-localization",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Kavutė to access your photos so you can attach one to a rating.",
+          "cameraPermission": "Allow Kavutė to use the camera so you can photograph your coffee."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Kavutė to use your location to find the cafe you are in."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "note": "No EAS projectId / owner / updates.url here on purpose: this app has not been linked to an EAS project yet. Run `eas init` (and `eas update:configure` if OTA updates are wanted) to have the CLI add them."
+    }
+  }
+}

@@ -17,10 +17,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app ./
-ENV ASPNETCORE_URLS=http://+:5080
-EXPOSE 5080
-# Non-root user shipped with the .NET runtime images (5080 needs no privileges).
+ENV ASPNETCORE_URLS=http://+:5090
+EXPOSE 5090
+# Non-root user shipped with the .NET runtime images (5090 needs no privileges).
 USER app
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=5 \
-  CMD curl -fsS http://localhost:5080/health || exit 1
+  CMD curl -fsS http://localhost:5090/health || exit 1
 ENTRYPOINT ["dotnet", "Coffee.Api.dll"]

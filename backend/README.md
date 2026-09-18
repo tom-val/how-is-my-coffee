@@ -2,7 +2,7 @@
 
 One .NET 10 minimal API, compiled with Native AOT and deployed as a **single** Lambda
 (`provided.al2023`, arm64, `bootstrap`) behind an API Gateway HTTP API. Locally the same binary runs
-under Kestrel on <http://localhost:5080>.
+under Kestrel on <http://localhost:5090>.
 
 The wire contract lives in [`../docs/api-contract.md`](../docs/api-contract.md) — that document wins
 over this one.
@@ -31,8 +31,8 @@ From the repository root (`make help` lists everything):
 ```bash
 make infra    # DynamoDB Local :8000 + MinIO :9000/:9001
 make seed     # creates table CoffeeApp (with GSI1) and bucket coffee-app-photos, loads demo data
-make api      # http://localhost:5080
-make api-lan  # 0.0.0.0:5080 — use this when a phone on the same Wi-Fi is the client
+make api      # http://localhost:5090
+make api-lan  # 0.0.0.0:5090 — use this when a phone on the same Wi-Fi is the client
 make test     # unit + integration tests
 ```
 
@@ -105,5 +105,6 @@ names are in `Shared/Data/Keys.cs`. Two additions:
   are a query rather than a scan.
 - `GSI1` (`GSI1PK="USERNAME"`, `GSI1SK=<username>`) for the username prefix search.
 
-Existing `USERNAME#` rows written by the old backend have no `GSI1PK`/`GSI1SK`, so those accounts
-will not appear in search until they are backfilled.
+Existing `USERNAME#` rows written by the old backend have no `GSI1PK`/`GSI1SK`. Login backfills
+them (`if_not_exists`, so it is idempotent), so an account becomes searchable the first time its
+owner signs in on the new stack — no migration job.

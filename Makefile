@@ -14,10 +14,10 @@ infra: ## Start DynamoDB Local (:8000) and MinIO (:9000/:9001)
 infra-down: ## Stop and remove the local containers
 	docker compose down
 
-api: ## Run the API on http://localhost:5080
+api: ## Run the API on http://localhost:5090
 	dotnet run --project backend/src/Coffee.Api
 
-api-lan: ## Run the API on 0.0.0.0:5080 so a phone on the same Wi-Fi can reach it
+api-lan: ## Run the API on 0.0.0.0:5090 so a phone on the same Wi-Fi can reach it
 	dotnet run --project backend/src/Coffee.Api --launch-profile lan
 
 seed: ## Create the table + photo bucket if missing and load the demo data
