@@ -92,6 +92,19 @@ so the web app and native apps can use the CloudFront origin as the API base.
 - `UserPlaceDto = { placeId, placeName, lat, lng, address?, lastVisited, visitCount }`
 - Place stats (`avgRating`, `ratingCount`) = average of each user's LATEST rating at that place, rounded to 1 decimal (same rule as today).
 
+### Places map / discovery (NEW)
+- `GET /v1/places?bbox=<minLng>,<minLat>,<maxLng>,<maxLat>&friends=<true|false>&limit=<n>` → `{ places: MapPlaceDto[] }` (auth required)
+  - Every place anyone has rated whose coordinates fall inside the bounding box (the map viewport). `limit` default 100, max 300;
+    when more match, keep the ones with the highest `ratingCount`. `friends=true` keeps only places rated by at least one person I follow (or me).
+  - `MapPlaceDto = { placeId, name, lat, lng, address?, avgRating, ratingCount, friendCount, visitedByMe: boolean, myVisitCount: number }`
+    `friendCount` = number of people I follow who have rated the place (me excluded); `visitedByMe` / `myVisitCount` from my own `USER#<me>/PLACE#<placeId>` row.
+  - Implementation: `PLACE#<placeId>/META` rows carry `GSI1PK="PLACE"`, `GSI1SK=<placeId>` (written whenever place stats are recomputed;
+    older rows without the keys are backfilled the next time anyone rates there, and the seed tool writes them). The endpoint queries GSI1 for
+    `GSI1PK="PLACE"`, filters the bbox in memory, then computes `friendCount` from the followed users' `PLACE#` rows (one query per friend, in parallel)
+    and `visitedByMe` from my own `PLACE#` rows. No table scan.
+  - bbox validation: four finite numbers, lat within ±90, lng within ±180, min ≤ max (a box crossing the antimeridian is rejected with 400 `invalid_bbox`).
+- `GET /v1/users/{username}/places` is unchanged and still powers the "my places" pins (`UserPlaceDto` has lat/lng).
+
 ### Caffeine
 - `POST /v1/drinks/resolve-caffeine` body `{ drinkName }` → `{ caffeineMg: int, source: "table" | "ai" | "error" }`
   - First the static lookup table (port of `backend/src/lib/caffeine.ts`, incl. Lithuanian aliases, longest-substring-first). If no match, ask OpenAI
