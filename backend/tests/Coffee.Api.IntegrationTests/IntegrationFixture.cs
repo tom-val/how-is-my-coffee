@@ -4,7 +4,10 @@ using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.AspNetCore.Hosting;
+using Coffee.Api.Shared.Push;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -28,6 +31,7 @@ public sealed class IntegrationFixture : WebApplicationFactory<Program>, IAsyncL
     public string? SkipReason { get; private set; }
 
     private IAmazonDynamoDB? _dynamo;
+    private WebApplicationFactory<Program>? _pushHost;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -39,6 +43,9 @@ public sealed class IntegrationFixture : WebApplicationFactory<Program>, IAsyncL
         builder.UseSetting("Photos:PublicBaseUrl", $"{S3Url}/{Bucket}");
         builder.UseSetting("Photos:AccessKey", "minioadmin");
         builder.UseSetting("Photos:SecretKey", "minioadmin");
+        // Nothing in this suite should reach exp.host. PushTests opts back in against a capturing
+        // sender (see PushHost); everywhere else the notifier is a no-op and costs no extra reads.
+        builder.UseSetting("Push:Enabled", "false");
         // appsettings.Local.json (gitignored, a real Google key on a developer machine) is added by
         // Program.cs *after* the host settings, so it would win over UseSetting. Blank the key from a
         // source of our own, appended last, so the suite can never call Google.
@@ -125,6 +132,20 @@ public sealed class IntegrationFixture : WebApplicationFactory<Program>, IAsyncL
             // Already there (or MinIO is down, in which case only the upload test notices).
         }
     }
+
+    /// <summary>Messages the notifier produced on <see cref="PushHost"/>. Reset per test.</summary>
+    public CapturingPushSender PushSender { get; } = new();
+
+    /// <summary>
+    /// The same app against the same table, but with push switched on and Expo replaced by
+    /// <see cref="PushSender"/>. One host for the whole collection (which xunit runs serially), so
+    /// the notification tests share it and simply reset the sender between them.
+    /// </summary>
+    public WebApplicationFactory<Program> PushHost => _pushHost ??= WithWebHostBuilder(builder =>
+    {
+        builder.UseSetting("Push:Enabled", "true");
+        builder.ConfigureTestServices(services => services.AddSingleton<IPushSender>(PushSender));
+    });
 
     /// <summary>Direct table access, for asserting on rows the API is supposed to have written or removed.</summary>
     public IAmazonDynamoDB Dynamo => _dynamo ?? throw new InvalidOperationException("Fixture not initialized.");

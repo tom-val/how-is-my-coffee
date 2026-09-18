@@ -25,6 +25,8 @@ export const qk = {
    * what makes panning a few metres a cache hit rather than a request.
    */
   mapPlaces: (bbox: string, friends: boolean) => ['mapPlaces', bbox, friends] as const,
+  /** The five push notification switches on the Settings screen. */
+  notificationPrefs: () => ['notificationPrefs'] as const,
 };
 
 /** Read-only key type — `unknown[]` is what `queryClient.setQueryData` wants. */

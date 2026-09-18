@@ -213,6 +213,11 @@ internal sealed class FakeHandler : HttpMessageHandler
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         }));
 
+    /// <summary>Full control over the reply — for tests whose response depends on the request
+    /// (one Expo ticket per message in the chunk, for instance).</summary>
+    public static FakeHandler Responding(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond) => new(respond);
+
     public static FakeHandler Delaying(TimeSpan delay) => new(async (_, ct) =>
     {
         await Task.Delay(delay, ct);

@@ -22,6 +22,7 @@ import { ConfirmHost } from '@/components/confirm-host';
 import { ToastHost } from '@/components/toast-host';
 import i18n from '@/i18n'; // side-effect import: initializes i18n before the first render
 import { AuthProvider } from '@/lib/auth';
+import { initNotificationRouting } from '@/lib/push';
 import { useStartupUpdate } from '@/lib/startupUpdate';
 import '@/theme/appearance'; // side-effect: applies the stored light/dark choice before first render
 import { colors, maxContentWidth } from '@/theme';
@@ -69,6 +70,14 @@ export default function RootLayout() {
     // "updating…" screen or the app. While the update check is still in flight the splash stays up.
     if (ready || downloading) void SplashScreen.hideAsync();
   }, [ready, downloading]);
+
+  // Notification taps navigate (see lib/push.ts). Wired only once the <Stack> below is actually
+  // rendering — a cold start launched by a tap resolves the launch notification long before the
+  // fonts and the update check do, and there is no router to push onto until then.
+  useEffect(() => {
+    if (!ready) return;
+    return initNotificationRouting();
+  }, [ready]);
 
   if (downloading) return <UpdatingSplash />;
   if (!ready) return null; // native splash: fonts loading and/or the update check is in flight

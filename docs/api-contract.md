@@ -121,6 +121,27 @@ so the web app and native apps can use the CloudFront origin as the API base.
 - 400 codes: `invalid_session` (missing / non-UUID session), `invalid_query` (`q` > 100 chars), `invalid_location` (lat/lng out of range or only one given), `invalid_place_id` (id not matching `^[A-Za-z0-9_-]{10,200}$`). Validation runs before the 503 check.
 - Never log the key or the full upstream URL. Language: pass `languageCode` from the request's `Accept-Language` (first tag) when present.
 
+### Push notifications (NEW — Expo push, sent by the API itself, no queue)
+Notification types (all ON by default; each can be switched off in Settings):
+
+| type | sent to | when |
+|---|---|---|
+| `tagged` | each registered companion | someone tags you on a rating (create, or added on edit) |
+| `like` | the rating's author | someone likes your rating (not on unlike, never for your own like) |
+| `comment` | the rating's author | someone comments on your rating (not the author's own comment) |
+| `follow` | the followed user | someone starts following you |
+| `friendRating` | everyone who follows the author | someone you follow posts a new rating |
+
+- `PUT /v1/push/tokens` body `{ token, platform }` — `token` is an Expo push token (`^ExponentPushToken\[[A-Za-z0-9_-]+\]$` or `ExpoPushToken[…]`), `platform` `ios|android`. Upsert; 200 `{ status: "ok" }`. Auth required.
+- `DELETE /v1/push/tokens/{token}` → 200 `{ status: "deleted" }` (idempotent). Called on sign-out so the next user of the device gets nothing meant for the previous one.
+- `GET /v1/notification-prefs` → `NotificationPrefsDto = { tagged, like, comment, follow, friendRating }` (booleans; a pref missing from storage = true).
+- `PUT /v1/notification-prefs` body: any subset of the same five booleans → 200 full `NotificationPrefsDto`.
+- Payload sent to Expo (`POST https://exp.host/--/api/v2/push/send`, chunks of ≤100): `{ to, title, body, sound: "default", data: { type, ratingId?, username? } }`.
+  Copy (English, server-side for now): tagged "<Name> had a coffee with you" / body "<drink> at <place>"; like "<Name> liked your <drink>"; comment "<Name> commented on your <drink>" / body = comment text (≤120 chars); follow "<Name> started following you"; friendRating "<Name> rated a coffee" / body "<drink> at <place> · <stars>★".
+- The tap target is derived on the client from `data`: `ratingId` → `/rating/<id>`, else `username` → `/u/<username>`.
+- Sending is best-effort and awaited with a 3 s budget before the API responds (Lambda freezes after the response, so no fire-and-forget). Expo tickets with `DeviceNotRegistered` delete that token. Failures are logged, never surfaced to the caller. Config `Push:Enabled` (default true) lets tests/dev switch it off; `Push:AccessToken` optional (Expo access token header when set).
+- Storage: `PK=USER#<userId> SK=PUSH#<token>` `{ token, platform, createdAt, lastSeenAt }`; prefs as a map attribute `notificationPrefs` on the `USER#<id>/PROFILE` row (absent keys = true).
+
 ### Caffeine
 - `POST /v1/drinks/resolve-caffeine` body `{ drinkName }` → `{ caffeineMg: int, source: "table" | "ai" | "error" }`
   - First the static lookup table (port of `backend/src/lib/caffeine.ts`, incl. Lithuanian aliases, longest-substring-first). If no match, ask OpenAI
@@ -147,6 +168,7 @@ so the web app and native apps can use the CloudFront origin as the API base.
 | User place | `USER#<userId>` | `PLACE#<placeId>` |
 | Friend | `USER#<userId>` | `FRIEND#<friendUserId>` |
 | Follower | `USER#<userId>` | `FOLLOWER#<followerUserId>` |
+| Push token (NEW) | `USER#<userId>` | `PUSH#<expoPushToken>` |
 | Tagged (NEW) | `USER#<userId>` | `TAGGED#<createdAt>#<ratingId>` |
 | Rating detail | `RATING#<ratingId>` | `META` |
 | Like | `RATING#<ratingId>` | `LIKE#<userId>` |
