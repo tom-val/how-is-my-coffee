@@ -124,7 +124,7 @@ so the web app and native apps can use the CloudFront origin as the API base.
 ### Caffeine
 - `POST /v1/drinks/resolve-caffeine` body `{ drinkName }` → `{ caffeineMg: int, source: "table" | "ai" | "error" }`
   - First the static lookup table (port of `backend/src/lib/caffeine.ts`, incl. Lithuanian aliases, longest-substring-first). If no match, ask OpenAI
-    (`OpenAi:ApiKey`; model `gpt-5-mini`; 15s timeout; any failure → `{ 0, "error" }`). The client may also ship the same table for instant local matches.
+    (`OpenAi:ApiKey`; Responses API, model `OpenAi:Model` default `gpt-5.6-luna`, `OpenAi:ReasoningEffort` default `none`; 15s timeout; any failure → `{ 0, "error" }`). The client may also ship the same table for instant local matches.
 
 ### Photos
 - `POST /v1/photos/upload-url` body `{ fileName, contentType (image/*) }` → `{ uploadUrl, key, photoUrl }` — presigned S3 PUT (5 min). Client PUTs the bytes, then sends `key` as `photoKey`.

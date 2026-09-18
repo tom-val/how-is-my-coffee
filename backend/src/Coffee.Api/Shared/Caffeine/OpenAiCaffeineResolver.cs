@@ -6,20 +6,20 @@ using Coffee.Api.Shared.Serialization;
 
 namespace Coffee.Api.Shared.Caffeine;
 
-// Wire shapes for the OpenAI chat-completions call. Public because the source-generated
+// Wire shapes for the OpenAI Responses API call. Public because the source-generated
 // JsonSerializerContext exposes a JsonTypeInfo property per type.
-public sealed record OpenAiMessage(string Role, string Content);
+public sealed record OpenAiReasoning(string Effort);
 
 public sealed record OpenAiRequest(
     string Model,
-    List<OpenAiMessage> Messages,
-    [property: JsonPropertyName("max_completion_tokens")] int MaxCompletionTokens);
+    string Instructions,
+    string Input,
+    OpenAiReasoning Reasoning,
+    [property: JsonPropertyName("max_output_tokens")] int MaxOutputTokens);
 
-public sealed record OpenAiChoiceMessage(string? Content);
-public sealed record OpenAiChoice(OpenAiChoiceMessage? Message);
-public sealed record OpenAiOutputContent(string? Text);
-public sealed record OpenAiOutput(List<OpenAiOutputContent>? Content);
-public sealed record OpenAiResponse(List<OpenAiChoice>? Choices, List<OpenAiOutput>? Output);
+public sealed record OpenAiOutputContent(string? Type, string? Text);
+public sealed record OpenAiOutput(string? Type, List<OpenAiOutputContent>? Content);
+public sealed record OpenAiResponse(List<OpenAiOutput>? Output);
 
 /// <summary>Fallback estimator for drinks the static table does not know.</summary>
 public interface ICaffeineAiResolver
@@ -29,15 +29,24 @@ public interface ICaffeineAiResolver
 }
 
 /// <summary>
-/// Asks GPT-5 mini for a drink's caffeine content. Every failure mode collapses to null on purpose:
-/// this sits on a user-facing "what's in my drink?" path, so a flaky third party must degrade to
+/// Asks an OpenAI model (default <c>gpt-5.6-luna</c>) for a drink's caffeine content over the
+/// Responses API. Every failure mode collapses to null on purpose: this sits on a user-facing
+/// "what's in my drink?" path, so a flaky third party must degrade to
 /// <c>{ caffeineMg: 0, source: "error" }</c> rather than fail the request.
+/// <para>
+/// Config: <c>OpenAi:ApiKey</c> (unset ⇒ always null), <c>OpenAi:Model</c>,
+/// <c>OpenAi:ReasoningEffort</c> (gpt-5.6-luna accepts none | low | medium | high | xhigh | max;
+/// "none" is right for a one-integer answer — a model that rejects it can be switched to "low"
+/// without a code change). No <c>temperature</c>: reasoning models reject it.
+/// </para>
 /// </summary>
 public sealed class OpenAiCaffeineResolver : ICaffeineAiResolver
 {
-    private const string Endpoint = "https://api.openai.com/v1/chat/completions";
-    private const string Model = "gpt-5-mini";
-    private const string SystemPrompt =
+    public const string DefaultModel = "gpt-5.6-luna";
+    public const string DefaultReasoningEffort = "none";
+    private const string Endpoint = "https://api.openai.com/v1/responses";
+    private const int MaxOutputTokens = 64; // one integer; the ceiling only bounds a runaway answer
+    private const string Instructions =
         "You are a caffeine content expert. Given a drink name, reply with your best estimate of the "
         + "caffeine content in milligrams for a standard single serving. Reply with ONLY an integer. "
         + "For non-caffeinated drinks reply 0.";
@@ -47,12 +56,18 @@ public sealed class OpenAiCaffeineResolver : ICaffeineAiResolver
     private readonly HttpClient _http;
     private readonly ILogger<OpenAiCaffeineResolver> _logger;
     private readonly string? _apiKey;
+    private readonly string _model;
+    private readonly string _reasoningEffort;
 
     public OpenAiCaffeineResolver(HttpClient http, IConfiguration config, ILogger<OpenAiCaffeineResolver> logger)
     {
         _http = http;
         _logger = logger;
         _apiKey = config["OpenAi:ApiKey"];
+        _model = string.IsNullOrWhiteSpace(config["OpenAi:Model"]) ? DefaultModel : config["OpenAi:Model"]!;
+        _reasoningEffort = string.IsNullOrWhiteSpace(config["OpenAi:ReasoningEffort"])
+            ? DefaultReasoningEffort
+            : config["OpenAi:ReasoningEffort"]!;
         if (string.IsNullOrWhiteSpace(_apiKey))
         {
             _logger.LogWarning(
@@ -69,11 +84,12 @@ public sealed class OpenAiCaffeineResolver : ICaffeineAiResolver
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(Timeout);
 
-            var body = new OpenAiRequest(Model,
-            [
-                new OpenAiMessage("system", SystemPrompt),
-                new OpenAiMessage("user", $"How many mg of caffeine in \"{drinkName}\"?"),
-            ], 2048);
+            var body = new OpenAiRequest(
+                _model,
+                Instructions,
+                $"How many mg of caffeine in \"{drinkName}\"?",
+                new OpenAiReasoning(_reasoningEffort),
+                MaxOutputTokens);
 
             using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint)
             {
@@ -95,11 +111,8 @@ public sealed class OpenAiCaffeineResolver : ICaffeineAiResolver
             var parsed = await JsonSerializer.DeserializeAsync(
                 stream, ApiJsonSerializerContext.Default.OpenAiResponse, timeout.Token);
 
-            // gpt-5 models may answer in either the Responses (`output`) or chat (`choices`) shape.
-            var text = parsed?.Output?.FirstOrDefault()?.Content?.FirstOrDefault()?.Text
-                       ?? parsed?.Choices?.FirstOrDefault()?.Message?.Content;
-
-            if (!int.TryParse(text?.Trim(), out var mg) || mg < 0)
+            var text = ExtractOutputText(parsed);
+            if (!int.TryParse(text, out var mg) || mg < 0)
             {
                 _logger.LogWarning("OpenAI gave an unparseable answer for {Drink}: {Text}", drinkName, text);
                 return null;
@@ -111,5 +124,25 @@ public sealed class OpenAiCaffeineResolver : ICaffeineAiResolver
             _logger.LogWarning(ex, "OpenAI caffeine lookup failed for {Drink}", drinkName);
             return null;
         }
+    }
+
+    /// <summary>
+    /// The plain text of a Responses API result. The raw API has no <c>output_text</c> field (that is
+    /// an SDK convenience): walk <c>output[]</c> and concatenate every <c>output_text</c> part of the
+    /// message items, skipping <c>reasoning</c> items, which carry no content for us.
+    /// </summary>
+    internal static string ExtractOutputText(OpenAiResponse? response)
+    {
+        if (response?.Output is null) return string.Empty;
+        var sb = new StringBuilder();
+        foreach (var item in response.Output)
+        {
+            if (item.Content is null) continue;
+            foreach (var part in item.Content)
+            {
+                if (part.Type == "output_text" && part.Text is not null) sb.Append(part.Text);
+            }
+        }
+        return sb.ToString().Trim();
     }
 }

@@ -92,6 +92,8 @@ Read through `IConfiguration`, so Lambda environment variables use `__` for the 
 | `Photos:AccessKey` / `Photos:SecretKey` | `minioadmin` | MinIO credentials — **dev only** |
 | `Photos:Region` | `eu-west-1` | Signing region for the S3 client |
 | `OpenAi:ApiKey` | *(unset)* | Caffeine fallback; unset logs a warning and unknown drinks resolve to `{0, "error"}` |
+| `OpenAi:Model` | `gpt-5.6-luna` | Model for the caffeine fallback (Responses API) |
+| `OpenAi:ReasoningEffort` | `none` | `reasoning.effort` sent with it; switch to `low` for a model that rejects `none` |
 | `Google:PlacesApiKey` | *(unset)* | Place search proxy; unset logs a warning and `/v1/places/suggest` answers `503 place_search_unavailable` |
 | `Cors:AllowedOrigins` | `[]` | Allowed origins in production; Development allows any origin |
 
