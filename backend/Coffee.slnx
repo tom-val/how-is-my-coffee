@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="src/Coffee.Api/Coffee.Api.csproj" />
   <Project Path="tools/Coffee.Seed/Coffee.Seed.csproj" />
+  <Project Path="tools/Coffee.Admin/Coffee.Admin.csproj" />
   <Project Path="tests/Coffee.Api.Tests/Coffee.Api.Tests.csproj" />
   <Project Path="tests/Coffee.Api.IntegrationTests/Coffee.Api.IntegrationTests.csproj" />
 </Solution>

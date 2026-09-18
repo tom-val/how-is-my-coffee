@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Coffee.Admin</RootNamespace>
+    <AssemblyName>Coffee.Admin</AssemblyName>
+    <!-- An operator tool run from a laptop with AWS credentials: never published to Lambda, so no
+         AOT constraints apply here. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Reused for PasswordHasher and the single-table key/attribute constants, so a password set
+         here is byte-for-byte what the API's login verifies. -->
+    <ProjectReference Include="../../src/Coffee.Api/Coffee.Api.csproj" />
+  </ItemGroup>
+
+</Project>

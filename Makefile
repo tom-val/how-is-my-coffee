@@ -1,7 +1,7 @@
 # Local development. Docker provides DynamoDB Local + MinIO; the API and the Expo client run on the
 # host so they hot-reload.
 
-.PHONY: help infra infra-down api api-lan seed test web aot-check
+.PHONY: help infra infra-down api api-lan seed test web aot-check set-password
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -31,3 +31,6 @@ web: ## Run the Expo client in a browser
 
 aot-check: ## Native AOT publish for this Mac — catches trimming/AOT breakage before CI does
 	dotnet publish backend/src/Coffee.Api/Coffee.Api.csproj -c Release -r osx-arm64
+
+set-password: ## Set a user's password: make set-password USER=tomas PASS=secret [REGION=eu-west-1] (uses your AWS credentials; add ENDPOINT=http://localhost:8000 for local)
+	dotnet run --project backend/tools/Coffee.Admin -- set-password "$(USER)" "$(PASS)" --region "$(or $(REGION),eu-west-1)" $(if $(ENDPOINT),--endpoint "$(ENDPOINT)",)

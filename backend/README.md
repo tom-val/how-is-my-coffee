@@ -138,3 +138,16 @@ Rows written by the old backend have no `GSI1PK`/`GSI1SK`, and both partitions b
 rather than needing a migration job: login backfills the `USERNAME#` row (`if_not_exists`, so it is
 idempotent), and `RatingStore.RecomputePlaceStatsAsync` rewrites the place keys on every create,
 edit and delete — so a café joins the map the next time anyone rates there.
+
+## Setting a password by hand
+
+Accounts have no e-mail, so there is no self-service reset. `tools/Coffee.Admin` writes a new hash
+with the API's own `PasswordHasher`:
+
+```bash
+make set-password USER=tomas PASS='new-password'            # production, via your AWS credentials
+make set-password USER=tomas PASS=coffee123 ENDPOINT=http://localhost:8000   # DynamoDB Local
+dotnet run --project backend/tools/Coffee.Admin -- hash-password 'new-password'   # just the hash + aws CLI commands (CloudShell)
+```
+
+Existing sessions keep their 30-day tokens; only new sign-ins need the new password.
