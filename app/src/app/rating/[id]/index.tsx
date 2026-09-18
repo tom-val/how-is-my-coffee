@@ -36,6 +36,7 @@ import { qk } from '@/lib/queryKeys';
 import { showToast } from '@/lib/toast';
 import { useToggleLike } from '@/lib/useToggleLike';
 import { colors, radius, spacing } from '@/theme';
+import { goBack } from '@/lib/navigation';
 
 /**
  * One rating in full: the photo, what it was, where, who was there, who liked it and what people
@@ -92,7 +93,7 @@ export default function RatingDetailScreen() {
           : []),
       ]);
       showToast(t('rating.deleted'));
-      router.back();
+      goBack();
     },
     onError: (e) => showToast(errorMessage(e, t)),
   });
@@ -100,7 +101,7 @@ export default function RatingDetailScreen() {
   if (detail.isLoading) {
     return (
       <View style={s.screen}>
-        <ScreenHeader title={t('rating.detailTitle')} onBack={() => router.back()} />
+        <ScreenHeader title={t('rating.detailTitle')} onBack={() => goBack()} />
         <View style={s.padded}>
           <SkeletonFeed count={1} />
         </View>
@@ -111,7 +112,7 @@ export default function RatingDetailScreen() {
   if (detail.isError || !detail.data) {
     return (
       <View style={s.screen}>
-        <ScreenHeader title={t('rating.detailTitle')} onBack={() => router.back()} />
+        <ScreenHeader title={t('rating.detailTitle')} onBack={() => goBack()} />
         <EmptyState
           title={t('rating.notFound')}
           body={detail.error ? errorMessage(detail.error, t) : undefined}
@@ -130,7 +131,7 @@ export default function RatingDetailScreen() {
       <ScreenHeader
         title={rating.drinkName}
         subtitle={rating.placeName}
-        onBack={() => router.back()}
+        onBack={() => goBack()}
         right={
           mine ? (
             <>

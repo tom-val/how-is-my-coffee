@@ -36,6 +36,7 @@ import { qk } from '@/lib/queryKeys';
 import { showToast } from '@/lib/toast';
 import { colors, radius, spacing } from '@/theme';
 import type { Companion } from '@/types';
+import { goBack } from '@/lib/navigation';
 
 /**
  * The one form for creating and editing a rating.
@@ -203,7 +204,7 @@ export function RatingComposer({ ratingId }: { ratingId?: string }) {
       ]);
       void refresh();
       showToast(isEdit ? t('rating.updated') : t('rating.saved'));
-      if (isEdit) router.back();
+      if (isEdit) goBack();
       else router.replace(`/rating/${rating.ratingId}`);
     },
     onError: (e) => setError(errorMessage(e, t)),
@@ -220,7 +221,7 @@ export function RatingComposer({ ratingId }: { ratingId?: string }) {
   if (isEdit && existing.isLoading) {
     return (
       <View style={s.screen}>
-        <ScreenHeader title={t('rating.editTitle')} onBack={() => router.back()} />
+        <ScreenHeader title={t('rating.editTitle')} onBack={() => goBack()} />
         <View style={s.padded}>
           <SkeletonFeed count={1} />
         </View>
@@ -234,7 +235,7 @@ export function RatingComposer({ ratingId }: { ratingId?: string }) {
     <View style={s.screen}>
       <ScreenHeader
         title={isEdit ? t('rating.editTitle') : t('rating.newTitle')}
-        onBack={() => router.back()}
+        onBack={() => goBack()}
       />
 
       <KeyboardAvoidingView

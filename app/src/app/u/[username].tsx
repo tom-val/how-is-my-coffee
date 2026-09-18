@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
@@ -15,6 +15,7 @@ import { useAuth } from '@/lib/auth';
 import { formatDate } from '@/lib/format';
 import { qk } from '@/lib/queryKeys';
 import { colors, radius, spacing } from '@/theme';
+import { goBack } from '@/lib/navigation';
 
 type Section = 'ratings' | 'places';
 
@@ -27,7 +28,6 @@ type Section = 'ratings' | 'places';
 export default function PublicProfileScreen() {
   const { username } = useLocalSearchParams<{ username: string }>();
   const { t, i18n } = useTranslation();
-  const router = useRouter();
   const { me } = useAuth();
 
   const [section, setSection] = useState<Section>('ratings');
@@ -47,7 +47,7 @@ export default function PublicProfileScreen() {
   if (user.isError) {
     return (
       <View style={s.screen}>
-        <ScreenHeader title={`@${username}`} onBack={() => router.back()} />
+        <ScreenHeader title={`@${username}`} onBack={() => goBack()} />
         <EmptyState
           title={t('profile.notFound')}
           body={errorMessage(user.error, t)}
@@ -112,7 +112,7 @@ export default function PublicProfileScreen() {
     <View style={s.screen}>
       <ScreenHeader
         title={user.data?.displayName ?? `@${username}`}
-        onBack={() => router.back()}
+        onBack={() => goBack()}
       />
       <RatingList
         queryKey={qk.userRatings(username)}

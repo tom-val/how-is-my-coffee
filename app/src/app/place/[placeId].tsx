@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -15,6 +15,7 @@ import { isFiniteCoord, regionAround } from '@/lib/geo';
 import { openInMaps } from '@/lib/place';
 import { qk } from '@/lib/queryKeys';
 import { colors, radius, spacing } from '@/theme';
+import { goBack } from '@/lib/navigation';
 
 /**
  * A cafe: where it is, its average across everyone's latest visit, how many ratings it has, and the
@@ -25,7 +26,6 @@ import { colors, radius, spacing } from '@/theme';
 export default function PlaceScreen() {
   const { placeId } = useLocalSearchParams<{ placeId: string }>();
   const { t } = useTranslation();
-  const router = useRouter();
   const { me } = useAuth();
 
   const place = useQuery({
@@ -37,7 +37,7 @@ export default function PlaceScreen() {
   if (place.isError) {
     return (
       <View style={s.screen}>
-        <ScreenHeader title={t('places.title')} onBack={() => router.back()} />
+        <ScreenHeader title={t('places.title')} onBack={() => goBack()} />
         <EmptyState
           title={t('places.notFound')}
           body={errorMessage(place.error, t)}
@@ -97,7 +97,7 @@ export default function PlaceScreen() {
     <View style={s.screen}>
       <ScreenHeader
         title={place.data?.name ?? t('places.title')}
-        onBack={() => router.back()}
+        onBack={() => goBack()}
       />
       <RatingList
         queryKey={qk.placeRatings(placeId)}
