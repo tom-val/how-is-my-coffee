@@ -105,6 +105,21 @@ so the web app and native apps can use the CloudFront origin as the API base.
   - bbox validation: four finite numbers, lat within ±90, lng within ±180, min ≤ max (a box crossing the antimeridian is rejected with 400 `invalid_bbox`).
 - `GET /v1/users/{username}/places` is unchanged and still powers the "my places" pins (`UserPlaceDto` has lat/lng).
 
+### Place search via Google Places (NEW — server-side proxy, key never leaves the API)
+- `GET /v1/places/suggest?q=<text>&session=<uuid>&lat=<n>&lng=<n>` → `{ suggestions: SuggestionDto[] }` (auth required)
+  - Proxies Google **Places API (New) Autocomplete** (`POST https://places.googleapis.com/v1/places:autocomplete`, header `X-Goog-Api-Key`)
+    with `input=q`, `sessionToken=session`, `includedPrimaryTypes=["cafe","coffee_shop","bakery","restaurant","bar"]`, and when lat/lng are
+    given `locationBias = circle(center, radius 25 km)`. `q` 2–100 chars (shorter → `{ suggestions: [] }`), `session` required (36-char UUID),
+    max 5 suggestions.
+  - `SuggestionDto = { googlePlaceId, name (structuredFormat.mainText), address (structuredFormat.secondaryText) }`
+- `GET /v1/places/suggest/{googlePlaceId}?session=<uuid>` → `ResolvedPlaceDto = { name, address, lat, lng }` (auth required)
+  - Proxies **Place Details (New)** (`GET https://places.googleapis.com/v1/places/{id}?sessionToken=`) with field mask
+    `id,displayName,formattedAddress,location` — Essentials tier, which also closes the autocomplete session so keystrokes are billed as one session.
+  - The client turns `name` into `placeId = place_<snake_case(name)>` exactly as before; Google's id is not stored anywhere.
+- Config `Google:PlacesApiKey` (Lambda env `Google__PlacesApiKey`; local dev: `appsettings.Local.json`, gitignored). When unset, both endpoints answer
+  `503 { "error": "place_search_unavailable" }` and the app falls back to Nominatim. Upstream failure / timeout (5 s) → `502 { "error": "place_search_failed" }`.
+- Never log the key or the full upstream URL. Language: pass `languageCode` from the request's `Accept-Language` (first tag) when present.
+
 ### Caffeine
 - `POST /v1/drinks/resolve-caffeine` body `{ drinkName }` → `{ caffeineMg: int, source: "table" | "ai" | "error" }`
   - First the static lookup table (port of `backend/src/lib/caffeine.ts`, incl. Lithuanian aliases, longest-substring-first). If no match, ask OpenAI

@@ -38,3 +38,6 @@ crash.log
 *.zip
 aot-out/
 dist/
+
+# Local-only backend secrets (Google Places key etc.) — never committed
+appsettings.Local.json

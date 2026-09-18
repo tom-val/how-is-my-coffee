@@ -80,6 +80,7 @@ module "api" {
     # behaviour maps straight onto the photos bucket root, so photoUrl = <base>/uploads/<user>/<id>.jpg.
     Photos__PublicBaseUrl = local.web_cf_origin
     OpenAi__ApiKey        = var.openai_api_key
+    Google__PlacesApiKey  = var.google_places_api_key
   }, local.api_cors_env)
 
   extra_policy_json = jsonencode({

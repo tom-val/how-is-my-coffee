@@ -43,6 +43,7 @@ jobs:
         env:
           # Optional: without it the caffeine endpoint answers from the static table only.
           TF_VAR_openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          TF_VAR_google_places_api_key: ${{ secrets.GOOGLE_PLACES_API_KEY }}
         run: |
           terraform init -input=false
           terraform apply -auto-approve -input=false

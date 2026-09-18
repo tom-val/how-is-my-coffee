@@ -19,6 +19,13 @@ variable "openai_api_key" {
   default     = ""
 }
 
+variable "google_places_api_key" {
+  description = "Google Places API (New) key used server-side for café autocomplete. Unset ⇒ the app falls back to Nominatim."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 # Optional custom domain for the web app (e.g. coffee.example.com). Empty ⇒ *.cloudfront.net only.
 # Setting it requests an ACM certificate in us-east-1; see acm_certificate_arn below for the
 # two-step activation.
