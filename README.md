@@ -40,11 +40,15 @@ make web       # Expo web on http://localhost:8081
 
 ```bash
 make api-lan               # binds 0.0.0.0:5090 and rewrites photo URLs to this machine's LAN IP
-cd app && npm run ios      # or: npm run android, or scan the QR from `npx expo start`
+cd app && npm run ios      # local debug build on the booted simulator (or --device for a phone)
+cd app && npm run android  # same for the running emulator / a connected phone
 ```
 
-In development the app derives the API host from the Metro server it connected to, so a device on
-the same Wi-Fi needs no `.env` changes. See `app/README.md`.
+Like the kindergarten app this is a native-build workflow: `expo run:*` compiles a debug app once,
+then JS changes hot-reload from Metro. Expo Go is not supported (push, Google Maps and the keyboard
+library need native modules it lacks). Devices get EAS builds (`eas-build` workflow) and JS-only
+changes via EAS Update. In development the app derives the API host from the Metro server it
+connected to, so a device on the same Wi-Fi needs no `.env` changes. See `app/README.md`.
 
 ### Tests
 

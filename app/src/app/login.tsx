@@ -1,7 +1,7 @@
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Wordmark } from '@/components/wordmark';
@@ -38,63 +38,58 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={s.screen} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={s.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Body contentStyle={s.content}>
-          <Wordmark tagline={t('app.tagline')} />
+      <Body contentStyle={s.content}>
+        <Wordmark tagline={t('app.tagline')} />
 
-          <View style={s.form}>
-            <Txt variant="title" tone="heading" style={s.centre}>
-              {t('auth.welcomeBack')}
+        <View style={s.form}>
+          <Txt variant="title" tone="heading" style={s.centre}>
+            {t('auth.welcomeBack')}
+          </Txt>
+
+          <TextField
+            label={t('auth.username')}
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="username"
+            textContentType="username"
+            returnKeyType="next"
+          />
+          <TextField
+            label={t('auth.password')}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="current-password"
+            textContentType="password"
+            returnKeyType="go"
+            onSubmitEditing={submit}
+          />
+
+          <ErrorText>{error}</ErrorText>
+
+          <Button
+            title={t('auth.signIn')}
+            onPress={submit}
+            loading={busy}
+            disabled={!canSubmit}
+          />
+
+          <Link href="/register" style={s.link}>
+            <Txt variant="label" tone="primary">
+              {t('auth.noAccount')}
             </Txt>
-
-            <TextField
-              label={t('auth.username')}
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="username"
-              textContentType="username"
-              returnKeyType="next"
-            />
-            <TextField
-              label={t('auth.password')}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoComplete="current-password"
-              textContentType="password"
-              returnKeyType="go"
-              onSubmitEditing={submit}
-            />
-
-            <ErrorText>{error}</ErrorText>
-
-            <Button
-              title={t('auth.signIn')}
-              onPress={submit}
-              loading={busy}
-              disabled={!canSubmit}
-            />
-
-            <Link href="/register" style={s.link}>
-              <Txt variant="label" tone="primary">
-                {t('auth.noAccount')}
-              </Txt>
-            </Link>
-          </View>
-        </Body>
-      </KeyboardAvoidingView>
+          </Link>
+        </View>
+      </Body>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  flex: { flex: 1 },
   content: { gap: spacing.xl, paddingTop: spacing.xxl, justifyContent: 'center', flexGrow: 1 },
   form: { gap: spacing.lg },
   centre: { textAlign: 'center' },

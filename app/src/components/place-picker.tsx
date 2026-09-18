@@ -226,7 +226,10 @@ export function PlacePicker({
         </Txt>
       </Pressable>
 
-      <ScrollView keyboardShouldPersistTaps="handled" style={s.list}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        style={s.list}>
         {previousMatches.length > 0 ? (
           <>
             <Txt variant="label" tone="faint" style={s.groupLabel}>

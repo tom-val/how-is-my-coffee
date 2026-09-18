@@ -2,6 +2,7 @@ import { Tabs, useRouter } from 'expo-router';
 import type { ComponentProps, ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View, type ColorValue } from 'react-native';
+import { useKeyboardState } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CupIcon, PeopleIcon, PersonIcon, PinIcon, PlusIcon } from './icons';
@@ -38,6 +39,12 @@ const TAB_LABELS: Record<string, string> = {
 export function TabBar({ state, navigation }: TabBarProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  // Android keeps `softwareKeyboardLayoutMode` at its default `resize` (what keyboard-controller
+  // wants), which would otherwise park this bar on top of the keyboard. Expo's documented
+  // alternative to switching the whole window to `pan` is to hide the bar instead — and a tab bar
+  // is not something anyone reaches for mid-sentence on either platform.
+  const { isVisible: keyboardVisible } = useKeyboardState();
+  if (keyboardVisible) return null;
 
   const routes = state.routes.filter((r) => r.name in TAB_ICONS);
   const middle = Math.ceil(routes.length / 2);

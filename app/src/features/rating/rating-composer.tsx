@@ -5,13 +5,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { CompanionPicker, MAX_COMPANIONS } from '@/components/companion-picker';
 import { CameraIcon, CupIcon, PinIcon, PlusIcon, XIcon } from '@/components/icons';
@@ -238,11 +237,11 @@ export function RatingComposer({ ratingId }: { ratingId?: string }) {
         onBack={() => goBack()}
       />
 
-      <KeyboardAvoidingView
-        style={s.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={60}>
-        <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView
+        contentContainerStyle={s.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        bottomOffset={spacing.xxl}>
           {/* Photo */}
           {photoUri ? (
             <View style={s.photoWrap}>
@@ -425,8 +424,7 @@ export function RatingComposer({ ratingId }: { ratingId?: string }) {
               </Txt>
             </View>
           ) : null}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
 
       <PlacePicker
         visible={placeOpen}

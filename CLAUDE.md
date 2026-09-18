@@ -10,7 +10,7 @@ DynamoDB. Layout and conventions follow ../kindergarten (same author).
 make infra   # DynamoDB Local :8000 + MinIO :9000/:9001
 make seed    # table CoffeeApp (+GSI1), bucket coffee-app-photos, demo users tomas / coffee_lover (coffee123)
 make api     # http://localhost:5090   (make api-lan → 0.0.0.0 for a phone on the LAN)
-make web     # Expo web :8081          (cd app && npm run ios | android for native)
+make web     # Expo web :8081          (cd app && npm run ios | android = local native debug build; no Expo Go)
 make test    # dotnet unit + integration tests (integration auto-skips without `make infra`)
 ```
 
@@ -49,6 +49,7 @@ docs/api-contract.md     THE wire contract. Change it first, then both sides.
   that holds the rating. Token lives in SecureStore (native) / localStorage (web) via `tokenStorage`.
 - Colours only through `@/theme` tokens (light + dark). Strings through i18n (`en` is the source, keep `lt` in step).
 - Web is a centered ≤500 px column; routes are deep-linkable (`/u/[username]`, `/rating/[id]`, `/place/[placeId]`).
+- Native modules (push, maps, keyboard-controller) mean Expo Go is NOT supported: test with `expo run:ios|android` or an EAS build.
 - Before pushing app changes: `cd app && npm run typecheck && npm run lint && npm run export:web`.
 
 ## Adding an endpoint

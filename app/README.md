@@ -13,10 +13,17 @@ call goes through `src/lib/api.ts`.
 npm install
 
 npm run web        # browser, http://localhost:8081
-npm run ios        # iOS simulator (needs Xcode)
-npm run android    # Android emulator (needs Android Studio)
-npm start          # Metro; scan the QR from Expo Go or a dev build
+npm run ios        # build and run the iOS app (needs Xcode + CocoaPods)
+npm run android    # build and run the Android app (needs Android Studio + JDK 17)
+npm start          # Metro on its own, for a build that is already installed
 ```
+
+**Expo Go is not supported.** The app depends on native modules that Expo Go does not carry, so
+`npm run ios` / `npm run android` do a local `expo run:*` debug build: they prebuild `ios/` and
+`android/` (both gitignored — they are generated, never edited by hand) and install the app on the
+simulator or emulator. The first build takes several minutes; after that `npm start` is enough.
+For a real device, or for anything you want to hand to someone else, build with EAS
+(`.github/workflows/eas-build.yml`).
 
 Checks:
 
@@ -88,6 +95,15 @@ Routes:
 - **Caffeine.** The drink table is shipped in `src/lib/caffeine.ts` (a port of the old web client's,
   Lithuanian aliases included) so a known drink fills in with no round trip. Only an unknown drink
   asks `POST /v1/drinks/resolve-caffeine`, which has the AI fallback.
+- **The keyboard.** Every input in the app is handled by
+  [`react-native-keyboard-controller`](https://kirillzyusko.github.io/react-native-keyboard-controller/):
+  `KeyboardProvider` sits at the root of `src/app/_layout.tsx`, the shared `Body` scroller in
+  `components/ui.tsx` is a `KeyboardAwareScrollView`, and the `Sheet` lifts itself by the live
+  keyboard height. The plain `KeyboardAvoidingView` this replaced did nothing on Android: with
+  `edgeToEdgeEnabled` the window no longer resizes for the keyboard on Android 15, so the soft
+  keyboard simply covered the login fields. `softwareKeyboardLayoutMode` stays at its default
+  (`resize`), which is what the controller wants; the custom tab bar hides itself while the
+  keyboard is up rather than riding on top of it.
 - **Maps.** The Places tab is map-first: **Mine** pins the cafes you have rated, **Discover** asks
   `GET /v1/places?bbox=…` for everything anyone has rated inside the current viewport (debounced
   ~500 ms after the map stops moving, with the bbox rounded to three decimals so a small pan is a

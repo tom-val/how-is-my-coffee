@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthGate } from '@/components/auth-gate';
@@ -85,6 +86,11 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
+        {/* Every input in the app rides on this. `preserveEdgeToEdge` keeps the Android window
+            edge-to-edge (app.json's `edgeToEdgeEnabled`) while the controller drives the insets:
+            on Android 15 the old `adjustResize` no longer resizes an edge-to-edge window, which is
+            why the plain `KeyboardAvoidingView` this app used to rely on did nothing there. */}
+        <KeyboardProvider>
         <QueryClientProvider client={queryClient}>
           {/* "auto" follows the OS appearance — dark glyphs on the light theme, light on dark. */}
           <StatusBar style="auto" />
@@ -108,6 +114,7 @@ export default function RootLayout() {
           <ConfirmHost />
           <ToastHost />
         </QueryClientProvider>
+        </KeyboardProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

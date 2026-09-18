@@ -4,7 +4,6 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,6 +12,11 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import {
+  KeyboardAwareScrollView,
+  useReanimatedKeyboardAnimation,
+} from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ConfirmHost } from './confirm-host';
@@ -387,9 +391,19 @@ export function Sheet({
   children: React.ReactNode;
 }) {
   const { t } = useTranslation();
+  const { height: keyboard } = useReanimatedKeyboardAnimation();
+
+  // The keyboard is padded onto the BACKDROP, not the sheet: the sheet's height is a percentage,
+  // and a percentage resolves against the parent's content box — so one padding both lifts the
+  // surface clear of the keyboard and shrinks it, which keeps the search field on screen AND
+  // leaves the results list scrollable in what is left.
+  const liftAboveKeyboard = useAnimatedStyle(() => ({
+    paddingBottom: Math.abs(keyboard.value),
+  }));
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={s.sheetBackdrop}>
+      <Animated.View style={[s.sheetBackdrop, liftAboveKeyboard]}>
         <Backdrop onPress={onClose} />
         <View style={[s.sheet, compact && s.sheetCompact]}>
           <View style={s.sheetGrab} />
@@ -408,7 +422,7 @@ export function Sheet({
           </View>
           {children}
         </View>
-      </View>
+      </Animated.View>
       {/* Gated on `visible`, not left to the Modal: react-native-web keeps a hidden modal's
           children mounted, which would leave a closed sheet claiming the dialog. */}
       {visible ? <ConfirmHost scoped /> : null}
@@ -448,20 +462,30 @@ export function SegmentedRow<T extends string>({
   );
 }
 
-/** Scrollable body for a screen — one place for the column padding. */
+/**
+ * Scrollable body for a screen — one place for the column padding, and one place for the keyboard.
+ *
+ * It is a `KeyboardAwareScrollView`, so any screen built on it scrolls its focused input clear of
+ * the keyboard and keeps the submit button reachable, on both platforms, without the screen knowing
+ * anything about it. `keyboardDismissMode="interactive"` lets a drag push the keyboard back down.
+ */
 export function Body({
   children,
   contentStyle,
   ...rest
-}: React.ComponentProps<typeof ScrollView> & { contentStyle?: StyleProp<ViewStyle> }) {
+}: React.ComponentProps<typeof KeyboardAwareScrollView> & {
+  contentStyle?: StyleProp<ViewStyle>;
+}) {
   return (
-    <ScrollView
+    <KeyboardAwareScrollView
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
       contentInsetAdjustmentBehavior="automatic"
+      bottomOffset={spacing.xxl}
       {...rest}
       contentContainerStyle={[s.body, contentStyle]}>
       {children}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

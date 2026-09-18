@@ -1,7 +1,7 @@
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Wordmark } from '@/components/wordmark';
@@ -43,73 +43,68 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={s.screen} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={s.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Body contentStyle={s.content}>
-          <Wordmark />
+      <Body contentStyle={s.content}>
+        <Wordmark />
 
-          <View style={s.form}>
-            <Txt variant="title" tone="heading" style={s.centre}>
-              {t('auth.createTitle')}
+        <View style={s.form}>
+          <Txt variant="title" tone="heading" style={s.centre}>
+            {t('auth.createTitle')}
+          </Txt>
+          <Txt variant="body" tone="soft" style={s.centre}>
+            {t('auth.createSubtitle')}
+          </Txt>
+
+          <TextField
+            label={t('auth.username')}
+            hint={t('auth.usernameHint')}
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="username-new"
+            error={username.length > 0 && !usernameValid ? t('auth.usernameHint') : undefined}
+          />
+          <TextField
+            label={t('auth.displayName')}
+            value={displayName}
+            onChangeText={setDisplayName}
+            autoCapitalize="words"
+            maxLength={50}
+          />
+          <TextField
+            label={t('auth.password')}
+            hint={t('auth.passwordHint')}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="new-password"
+            returnKeyType="go"
+            onSubmitEditing={submit}
+          />
+
+          <ErrorText>{error}</ErrorText>
+
+          <Button
+            title={t('auth.signUp')}
+            onPress={submit}
+            loading={busy}
+            disabled={!canSubmit}
+          />
+
+          <Link href="/login" style={s.link}>
+            <Txt variant="label" tone="primary">
+              {t('auth.haveAccount')}
             </Txt>
-            <Txt variant="body" tone="soft" style={s.centre}>
-              {t('auth.createSubtitle')}
-            </Txt>
-
-            <TextField
-              label={t('auth.username')}
-              hint={t('auth.usernameHint')}
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="username-new"
-              error={username.length > 0 && !usernameValid ? t('auth.usernameHint') : undefined}
-            />
-            <TextField
-              label={t('auth.displayName')}
-              value={displayName}
-              onChangeText={setDisplayName}
-              autoCapitalize="words"
-              maxLength={50}
-            />
-            <TextField
-              label={t('auth.password')}
-              hint={t('auth.passwordHint')}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoComplete="new-password"
-              returnKeyType="go"
-              onSubmitEditing={submit}
-            />
-
-            <ErrorText>{error}</ErrorText>
-
-            <Button
-              title={t('auth.signUp')}
-              onPress={submit}
-              loading={busy}
-              disabled={!canSubmit}
-            />
-
-            <Link href="/login" style={s.link}>
-              <Txt variant="label" tone="primary">
-                {t('auth.haveAccount')}
-              </Txt>
-            </Link>
-          </View>
-        </Body>
-      </KeyboardAvoidingView>
+          </Link>
+        </View>
+      </Body>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  flex: { flex: 1 },
   content: { gap: spacing.xl, paddingTop: spacing.xl, justifyContent: 'center', flexGrow: 1 },
   form: { gap: spacing.lg },
   centre: { textAlign: 'center' },

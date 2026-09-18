@@ -91,7 +91,10 @@ export function CompanionPicker({
         {full ? t('rating.companionsMax') : `${selected.length}/${MAX_COMPANIONS}`}
       </Txt>
 
-      <ScrollView keyboardShouldPersistTaps="handled" style={s.list}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        style={s.list}>
         {query.trim().length > 0 && !isPicked(undefined, query.trim()) ? (
           <Pressable
             onPress={addGuest}
