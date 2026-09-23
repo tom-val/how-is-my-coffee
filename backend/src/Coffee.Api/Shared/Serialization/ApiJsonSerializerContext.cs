@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Amazon.Lambda.APIGatewayEvents;
+using Coffee.Api.Features.Account;
 using Coffee.Api.Features.Auth;
 using Coffee.Api.Features.Caffeine;
 using Coffee.Api.Features.Friends;
@@ -43,6 +44,7 @@ namespace Coffee.Api.Shared.Serialization;
 // Auth.
 [JsonSerializable(typeof(RegisterBody))]
 [JsonSerializable(typeof(LoginBody))]
+[JsonSerializable(typeof(DeleteAccountBody))]
 [JsonSerializable(typeof(AuthResponse))]
 // Users.
 [JsonSerializable(typeof(UserDto))]

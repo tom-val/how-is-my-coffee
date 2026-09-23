@@ -3,6 +3,7 @@ using Amazon.Lambda.AspNetCoreServer;
 using Amazon.Lambda.Serialization.SystemTextJson;
 using Amazon.Runtime;
 using Amazon.S3;
+using Coffee.Api.Features.Account;
 using Coffee.Api.Features.Auth;
 using Coffee.Api.Features.Caffeine;
 using Coffee.Api.Features.Feed;
@@ -109,6 +110,8 @@ else
 
 builder.Services.AddSingleton<CoffeeDb>();
 builder.Services.AddSingleton<RatingStore>();
+builder.Services.AddSingleton<AccountDeleter>();
+builder.Services.AddSingleton<IAccountLookup, DynamoAccountLookup>();
 builder.Services.AddSingleton<IPhotoStorage, S3PhotoStorage>();
 builder.Services.AddSingleton<JwtIssuer>();
 builder.Services.AddScoped<AuthContext>();
@@ -143,6 +146,7 @@ app.UseMiddleware<AuthMiddleware>();
 app.MapHealthEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapAccountEndpoints();
 app.MapFriendEndpoints();
 app.MapRatingEndpoints();
 app.MapPlaceEndpoints();

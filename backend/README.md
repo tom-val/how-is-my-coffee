@@ -21,7 +21,7 @@ src/Coffee.Api/
   Shared/Storage/             presigned S3/MinIO uploads and public photo URLs
   Shared/Serialization/       the source-generated JSON context (see "Native AOT" below)
 tools/Coffee.Seed/            creates the table + bucket and loads demo data
-tests/Coffee.Api.Tests/       unit tests (hashing, JWT, caffeine table, cursors, health, Expo push)
+tests/Coffee.Api.Tests/       unit tests (hashing, JWT, caffeine table, cursors, health, Expo push, deleted-user tokens)
 tests/Coffee.Api.IntegrationTests/  full HTTP flows against DynamoDB Local + MinIO
 ```
 
@@ -172,6 +172,31 @@ header, ticket handling, and every failure mode collapsing to "nothing sent"). `
 real endpoints against DynamoDB Local on a second host with `Push:Enabled=true` and Expo replaced by
 a capturing `IPushSender`; the rest of the integration suite leaves `Push:Enabled=false`, so no other
 test builds a message.
+
+## Account deletion
+
+`DELETE /v1/me` with `{ "password": "…" }` (the App Store / Google Play in-app deletion requirement).
+The password is re-checked (legacy scrypt hashes verify too), so a stolen token alone cannot wipe an
+account. `Features/Account/AccountDeleter.cs` then removes, in this order:
+
+1. every rating the user wrote — photo object first (only keys under `uploads/<userId>/`, since
+   `photoKey` is client-supplied), then `RatingStore.DeleteRatingAsync`, the same teardown
+   `DELETE /v1/ratings/{id}` uses; places run in parallel, ratings of one place in sequence so the
+   stats recompute cannot race;
+2. their likes and comments on other people's ratings — a filtered table **Scan** (nothing indexes
+   those rows by author; O(table), acceptable at this scale). Row delete + the three counter
+   decrements are one transaction, guarded so a counter never drops below 0;
+3. their entry in other people's `companions` (all three copies), then their `TAGGED#` rows;
+4. `FRIEND#`/`FOLLOWER#` rows and the mirror rows on the other users' partitions;
+5. `PUSH#` tokens, then a sweep of anything else left on `USER#<id>`;
+6. the `USERNAME#` lookup (conditional on it still pointing at this user) and the `PROFILE` row, last.
+
+Every step re-reads what is left, so a call that dies half-way can simply be repeated with the same
+token and password — the profile is still there until the very end. After that, old tokens are
+refused centrally: `AuthMiddleware` checks that the token's user still has a profile (one strongly
+consistent key-only `GetItem` per authenticated request, `Shared/Auth/AccountLookup.cs`) and treats
+a deleted user as anonymous, so every protected endpoint answers `401 unauthorized`. A large account
+can outrun the 30 s Lambda / API Gateway limit; the client's retry finishes the job.
 
 ## DynamoDB
 

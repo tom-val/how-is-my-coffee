@@ -1,7 +1,10 @@
 using System.Net;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
+using Coffee.Api.Shared.Auth;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Coffee.Api.Tests;
@@ -26,7 +29,20 @@ public sealed class TestAppFactory : WebApplicationFactory<Program>
         // source of our own, appended last, so the suite can never call Google.
         builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(
             new Dictionary<string, string?> { ["Google:PlacesApiKey"] = "" }));
+        // The auth middleware asks whether a token's user still exists; answer from memory so these
+        // tests stay DynamoDB-free. Tests that need a deleted user add its id to Accounts.Deleted.
+        builder.ConfigureTestServices(services => services.AddSingleton<IAccountLookup>(Accounts));
     }
+
+    public InMemoryAccountLookup Accounts { get; } = new();
+}
+
+/// <summary>Every user exists unless listed in <see cref="Deleted"/>.</summary>
+public sealed class InMemoryAccountLookup : IAccountLookup
+{
+    public System.Collections.Concurrent.ConcurrentDictionary<string, bool> Deleted { get; } = new();
+
+    public Task<bool> ExistsAsync(string userId, CancellationToken ct) => Task.FromResult(!Deleted.ContainsKey(userId));
 }
 
 public class HealthEndpointTests(TestAppFactory factory) : IClassFixture<TestAppFactory>

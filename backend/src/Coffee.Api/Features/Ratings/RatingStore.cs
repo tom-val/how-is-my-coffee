@@ -1,3 +1,4 @@
+using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
 using Coffee.Api.Shared.Data;
 
@@ -166,6 +167,198 @@ public sealed class RatingStore(CoffeeDb db)
             ? Task.CompletedTask
             : db.UpdateAsync(Keys.User(userId), Keys.ProfileSk, "ADD totalCaffeineMg :delta",
                 new Dictionary<string, AttributeValue> { [":delta"] = Av.N(delta) }, ct);
+
+    /// <summary>
+    /// Tears a rating down completely: <c>RATING#&lt;id&gt;</c> (META, likes, comments), the PLACE# copy,
+    /// every companion's <c>TAGGED#</c> row, the author's <c>USER#…/PLACE#</c> visit, the place stats and
+    /// the author's caffeine total — and the author's USER# copy last.
+    /// <para>
+    /// <paramref name="rating"/> may be any of the three copies (they carry the same core fields).
+    /// The account-deletion path hands in the USER# copy, which is why that one goes last: if the
+    /// Lambda dies half-way, the next attempt still finds the rating on the author's partition and
+    /// finishes it instead of leaving the other copies orphaned.
+    /// </para>
+    /// </summary>
+    public async Task DeleteRatingAsync(Dictionary<string, AttributeValue> rating, CancellationToken ct)
+    {
+        var ratingId = rating.StrOr(Attr.RatingId, string.Empty);
+        var userId = rating.StrOr(Attr.UserId, string.Empty);
+        var createdAt = rating.StrOr(Attr.CreatedAt, string.Empty);
+        var placeId = rating.StrOr(Attr.PlaceId, string.Empty);
+        if (ratingId.Length == 0 || userId.Length == 0 || createdAt.Length == 0) return;
+        var sk = Keys.RatingSk(createdAt, ratingId);
+
+        // Everything under RATING#<id> — META plus every like and comment.
+        var owned = await db.QueryPartitionAsync(Keys.Rating(ratingId), ct);
+        await db.BatchDeleteAsync(
+            [.. owned.Select(i => CoffeeDb.Key(i.StrOr(Attr.Pk, string.Empty), i.StrOr(Attr.Sk, string.Empty)))], ct);
+
+        if (placeId.Length > 0) await db.DeleteAsync(Keys.Place(placeId), sk, ct);
+        await RemoveTaggedRowsAsync(RatingMapper.Companions(rating), ratingId, createdAt, ct);
+
+        if (placeId.Length > 0)
+        {
+            // One fewer visit to this place; drop the entry once the last rating there is gone.
+            var userPlace = await db.Client.UpdateItemAsync(new UpdateItemRequest
+            {
+                TableName = db.TableName,
+                Key = CoffeeDb.Key(Keys.User(userId), Keys.UserPlaceSk(placeId)),
+                UpdateExpression = "ADD visitCount :minusOne",
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue> { [":minusOne"] = Av.N(-1) },
+                ReturnValues = ReturnValue.ALL_NEW,
+            }, ct);
+            if (userPlace.Attributes.Int(Attr.VisitCount) <= 0)
+                await db.DeleteAsync(Keys.User(userId), Keys.UserPlaceSk(placeId), ct);
+        }
+
+        // The PLACE# copy is already gone, so the recompute sees the final state.
+        if (placeId.Length > 0) await RecomputePlaceStatsAsync(placeId, ct);
+        await AdjustTotalCaffeineAsync(userId, -rating.Int(Attr.CaffeineMg), ct);
+        await db.DeleteAsync(Keys.User(userId), sk, ct);
+    }
+
+    /// <summary>
+    /// Removes one like or comment row from somebody's rating and takes it off that rating's counter
+    /// on all three copies, exactly once.
+    /// <para>
+    /// The row delete (conditional on the row still existing) and the three decrements (conditional
+    /// on the copy existing and its counter being above zero) are one transaction, so a retry after a
+    /// crash can neither decrement twice nor skip the decrement. If the transaction is refused because
+    /// the row is already gone, there is nothing to do. If it is refused because a copy is missing or
+    /// a counter already reads 0 (drift from the old stack), the row is removed on its own and each
+    /// copy gets a separately guarded decrement — a counter never goes below 0 and a missing copy is
+    /// never recreated as a stub.
+    /// </para>
+    /// </summary>
+    public async Task RemoveReactionAsync(string ratingId, string reactionSk, string counterAttribute, CancellationToken ct)
+    {
+        var rowKey = CoffeeDb.Key(Keys.Rating(ratingId), reactionSk);
+        var meta = await db.GetAsync(Keys.Rating(ratingId), Keys.MetaSk, ct,
+            Attr.UserId, Attr.PlaceId, Attr.CreatedAt);
+        if (meta is null)
+        {
+            // Orphaned reaction on a rating that no longer exists: no counters left to fix.
+            await db.DeleteAsync(Keys.Rating(ratingId), reactionSk, ct);
+            return;
+        }
+
+        var copies = RatingCopies(ratingId, meta);
+        var names = new Dictionary<string, string> { ["#c"] = counterAttribute };
+        const string Decrement = "SET #c = #c - :one";
+        const string Guard = "attribute_exists(PK) AND #c > :zero";
+        var values = new Dictionary<string, AttributeValue> { [":one"] = Av.N(1), [":zero"] = Av.N(0) };
+
+        var transaction = new List<TransactWriteItem>
+        {
+            new()
+            {
+                Delete = new Delete
+                {
+                    TableName = db.TableName,
+                    Key = rowKey,
+                    ConditionExpression = "attribute_exists(PK)",
+                },
+            },
+        };
+        transaction.AddRange(copies.Select(key => new TransactWriteItem
+        {
+            Update = new Update
+            {
+                TableName = db.TableName,
+                Key = key,
+                UpdateExpression = Decrement,
+                ConditionExpression = Guard,
+                ExpressionAttributeNames = new(names),
+                ExpressionAttributeValues = new(values),
+            },
+        }));
+
+        try
+        {
+            await db.TransactWriteAsync(transaction, ct);
+            return;
+        }
+        catch (TransactionCanceledException ex)
+            when (ex.CancellationReasons is { Count: > 0 } reasons && reasons[0].Code == "ConditionalCheckFailed")
+        {
+            return; // The row is already gone — a previous attempt (or an unlike) handled it.
+        }
+        catch (TransactionCanceledException)
+        {
+            // Some copy is missing or already at 0: fall through to the per-copy path.
+        }
+
+        await db.DeleteAsync(Keys.Rating(ratingId), reactionSk, ct);
+        foreach (var key in copies)
+        {
+            try
+            {
+                await db.Client.UpdateItemAsync(new UpdateItemRequest
+                {
+                    TableName = db.TableName,
+                    Key = key,
+                    UpdateExpression = Decrement,
+                    ConditionExpression = Guard,
+                    ExpressionAttributeNames = new(names),
+                    ExpressionAttributeValues = new(values),
+                }, ct);
+            }
+            catch (ConditionalCheckFailedException)
+            {
+                // Missing copy or counter already 0: leave it.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Takes <paramref name="userId"/> out of a rating's <c>companions</c> on all three copies. The
+    /// other companions (registered or guest) are kept verbatim. Idempotent: once the user is gone
+    /// from the list there is nothing to write.
+    /// </summary>
+    public async Task RemoveCompanionAsync(string ratingId, string userId, CancellationToken ct)
+    {
+        var meta = await db.GetAsync(Keys.Rating(ratingId), Keys.MetaSk, ct);
+        if (meta is null) return;
+
+        var current = meta.List(Attr.Companions);
+        var remaining = RatingMapper.WithoutCompanion(current, userId);
+        if (remaining.Count == current.Count) return;
+
+        foreach (var key in RatingCopies(ratingId, meta))
+        {
+            try
+            {
+                await db.Client.UpdateItemAsync(new UpdateItemRequest
+                {
+                    TableName = db.TableName,
+                    Key = key,
+                    UpdateExpression = "SET companions = :companions",
+                    ConditionExpression = "attribute_exists(PK)",
+                    ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                    {
+                        [":companions"] = Av.L(remaining),
+                    },
+                }, ct);
+            }
+            catch (ConditionalCheckFailedException)
+            {
+                // That copy does not exist; do not recreate it as a stub.
+            }
+        }
+    }
+
+    /// <summary>Keys of the META, USER# and PLACE# copies of a rating, read off any one of them.</summary>
+    private static List<Dictionary<string, AttributeValue>> RatingCopies(
+        string ratingId, Dictionary<string, AttributeValue> rating)
+    {
+        var sk = Keys.RatingSk(rating.StrOr(Attr.CreatedAt, string.Empty), ratingId);
+        return
+        [
+            CoffeeDb.Key(Keys.Rating(ratingId), Keys.MetaSk),
+            CoffeeDb.Key(Keys.User(rating.StrOr(Attr.UserId, string.Empty)), sk),
+            CoffeeDb.Key(Keys.Place(rating.StrOr(Attr.PlaceId, string.Empty)), sk),
+        ];
+    }
 
     /// <summary>
     /// Keeps the denormalised counters in step across all three copies of a rating. A missing copy

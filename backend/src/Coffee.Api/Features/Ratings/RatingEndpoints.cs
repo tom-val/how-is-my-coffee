@@ -280,34 +280,7 @@ public static class RatingEndpoints
         if (meta.StrOr(Attr.UserId, string.Empty) != userId)
             return ApiResults.Forbidden("You can only delete your own ratings");
 
-        var createdAt = meta.StrOr(Attr.CreatedAt, string.Empty);
-        var placeId = meta.StrOr(Attr.PlaceId, string.Empty);
-        var sk = Keys.RatingSk(createdAt, ratingId);
-
-        // Everything under RATING#<id> — META plus every like and comment.
-        var owned = await db.QueryPartitionAsync(Keys.Rating(ratingId), ct);
-        await db.BatchDeleteAsync(
-            [.. owned.Select(i => CoffeeDb.Key(i.StrOr(Attr.Pk, string.Empty), i.StrOr(Attr.Sk, string.Empty)))], ct);
-
-        await db.DeleteAsync(Keys.User(userId), sk, ct);
-        await db.DeleteAsync(Keys.Place(placeId), sk, ct);
-        await store.RemoveTaggedRowsAsync(RatingMapper.Companions(meta), ratingId, createdAt, ct);
-
-        // One fewer visit to this place; drop the entry once the last rating there is gone.
-        var userPlace = await db.Client.UpdateItemAsync(new UpdateItemRequest
-        {
-            TableName = db.TableName,
-            Key = CoffeeDb.Key(Keys.User(userId), Keys.UserPlaceSk(placeId)),
-            UpdateExpression = "ADD visitCount :minusOne",
-            ExpressionAttributeValues = new Dictionary<string, AttributeValue> { [":minusOne"] = Av.N(-1) },
-            ReturnValues = ReturnValue.ALL_NEW,
-        }, ct);
-        if (userPlace.Attributes.Int(Attr.VisitCount) <= 0)
-            await db.DeleteAsync(Keys.User(userId), Keys.UserPlaceSk(placeId), ct);
-
-        await store.RecomputePlaceStatsAsync(placeId, ct);
-        await store.AdjustTotalCaffeineAsync(userId, -meta.Int(Attr.CaffeineMg), ct);
-
+        await store.DeleteRatingAsync(meta, ct);
         return ApiResults.Deleted();
     }
 

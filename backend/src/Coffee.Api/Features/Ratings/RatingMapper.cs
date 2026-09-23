@@ -31,6 +31,14 @@ public static class RatingMapper
         return companions;
     }
 
+    /// <summary>
+    /// The stored <c>companions</c> list minus every entry for <paramref name="userId"/>. Works on the
+    /// raw attribute values so the entries that stay are written back exactly as they were (including
+    /// anything the old stack stored that <see cref="Companions"/> would not round-trip).
+    /// </summary>
+    public static List<AttributeValue> WithoutCompanion(IReadOnlyList<AttributeValue> stored, string userId) =>
+        [.. stored.Where(entry => entry.M is not { } map || map.Str(Attr.UserId) != userId)];
+
     public static AttributeValue ToAttribute(IReadOnlyList<CompanionDto> companions)
     {
         var list = new List<AttributeValue>(companions.Count);
