@@ -1,0 +1,42 @@
+name: Admin (manual)
+
+# Runs an operator command from backend/tools/Coffee.Admin against the PRODUCTION table using the
+# same OIDC deploy role as the deploy workflow — for the cases where nobody has AWS credentials on
+# a laptop. Everything here is idempotent and read-mostly; nothing deletes data.
+#
+#   backfill-indexes   one-off after the rework: gives PLACE#…/META and USERNAME# rows written by
+#                      the old Node backend their GSI1 keys, so Discover and username search can
+#                      see them. Safe to re-run; rows that already have keys are untouched.
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: Admin command to run
+        required: true
+        default: backfill-indexes
+        type: choice
+        options: [backfill-indexes]
+
+permissions:
+  id-token: write # OIDC → AWS
+  contents: read
+
+jobs:
+  admin:
+    name: ${{ inputs.command }}
+    runs-on: ubuntu-latest
+    environment: Prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Run ${{ inputs.command }}
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+        run: dotnet run --project backend/tools/Coffee.Admin -- ${{ inputs.command }} --table CoffeeApp

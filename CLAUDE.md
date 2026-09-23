@@ -25,9 +25,10 @@ backend/src/Coffee.Api/  Program.cs; Features/<Feature>/<Feature>Endpoints.cs (+
                          Shared/{Auth,Data,Caffeine,Storage,Serialization,Middleware}
 backend/tests/           Coffee.Api.Tests (unit), Coffee.Api.IntegrationTests (DynamoDB Local + MinIO)
 backend/tools/Coffee.Seed/  creates table/bucket + demo data, idempotent
+backend/tools/Coffee.Admin/ operator commands: set-password, hash-password, backfill-indexes (GSI1 for pre-rework rows)
 infra/modules/{dynamodb,lambda,api-gateway,s3-web,s3-photos,cloudfront}, infra/environments/prod
 docs/api-contract.md     THE wire contract. Change it first, then both sides.
-.github/workflows/       pr-checks.yml, deploy.yml (reusable), deploy-prod.yml, eas-build.yml (manual)
+.github/workflows/       pr-checks.yml, deploy.yml (reusable), deploy-prod.yml, eas-build.yml + eas-update.yml + admin.yml (manual)
 ```
 
 ## Backend rules (Native AOT — these break the publish, not the build)

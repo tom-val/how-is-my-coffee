@@ -205,3 +205,16 @@ dotnet run --project backend/tools/Coffee.Admin -- hash-password 'new-password' 
 ```
 
 Existing sessions keep their 30-day tokens; only new sign-ins need the new password.
+
+## Backfilling the GSI1 index after the rework
+
+Rows written by the old Node backend have no `GSI1PK`/`GSI1SK`, so Discover and username search do
+not see them until a place is rated again or a user logs in. One command fixes everything at once
+(idempotent):
+
+```bash
+dotnet run --project backend/tools/Coffee.Admin -- backfill-indexes               # production, your AWS creds
+dotnet run --project backend/tools/Coffee.Admin -- backfill-indexes --endpoint http://localhost:8000
+```
+
+Or run the **Admin (manual)** GitHub workflow, which does the same with the deploy role.

@@ -23,6 +23,7 @@ if (args0.Count == 0)
 {
     Console.Error.WriteLine("usage: Coffee.Admin set-password <username> <password> [--table T] [--region R] [--endpoint URL]");
     Console.Error.WriteLine("       Coffee.Admin hash-password <password>");
+    Console.Error.WriteLine("       Coffee.Admin backfill-indexes [--table T] [--region R] [--endpoint URL]");
     return 2;
 }
 
@@ -98,6 +99,61 @@ switch (args0[0])
                 },
             });
             Console.WriteLine($"password set for {username} ({userId}) in {table} ({region}). Existing sessions stay signed in.");
+            return 0;
+        }
+    case "backfill-indexes":
+        {
+            // Rows written by the pre-rework Node backend predate GSI1. The API self-heals a place
+            // when it is rated again and a user when they log in, but until then Discover (GSI1PK=
+            // "PLACE") and username search (GSI1PK="USERNAME") cannot see them. One scan fixes all of
+            // it; idempotent — rows that already carry the keys are left alone.
+            using var client = CreateClient(region, endpoint);
+            var scanned = 0; var places = 0; var users = 0;
+            Dictionary<string, AttributeValue>? startKey = null;
+            do
+            {
+                var page = await client.ScanAsync(new ScanRequest
+                {
+                    TableName = table,
+                    ProjectionExpression = "PK, SK, GSI1PK, placeId, username",
+                    ExclusiveStartKey = startKey,
+                });
+                foreach (var item in page.Items)
+                {
+                    scanned++;
+                    if (item.ContainsKey(Attr.Gsi1Pk)) continue;
+                    var pk = item[Attr.Pk].S;
+                    var sk = item[Attr.Sk].S;
+                    string? indexPk = null, indexSk = null;
+                    if (sk == Keys.MetaSk && pk.StartsWith(Keys.PlacePrefix, StringComparison.Ordinal))
+                    {
+                        indexPk = Keys.PlaceIndexPk;
+                        indexSk = item.TryGetValue(Attr.PlaceId, out var pid) ? pid.S : pk[Keys.PlacePrefix.Length..];
+                    }
+                    else if (sk == Keys.UsernameSk && pk.StartsWith("USERNAME#", StringComparison.Ordinal))
+                    {
+                        indexPk = Keys.UsernameIndexPk;
+                        indexSk = item.TryGetValue(Attr.Username, out var u) ? u.S : pk["USERNAME#".Length..];
+                    }
+                    if (indexPk is null || string.IsNullOrEmpty(indexSk)) continue;
+
+                    await client.UpdateItemAsync(new UpdateItemRequest
+                    {
+                        TableName = table,
+                        Key = new Dictionary<string, AttributeValue> { [Attr.Pk] = new(pk), [Attr.Sk] = new(sk) },
+                        UpdateExpression = "SET GSI1PK = if_not_exists(GSI1PK, :pk), GSI1SK = if_not_exists(GSI1SK, :sk)",
+                        ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                        {
+                            [":pk"] = new(indexPk),
+                            [":sk"] = new(indexSk),
+                        },
+                    });
+                    if (indexPk == Keys.PlaceIndexPk) places++; else users++;
+                }
+                startKey = page.LastEvaluatedKey is { Count: > 0 } ? page.LastEvaluatedKey : null;
+            } while (startKey is not null);
+
+            Console.WriteLine($"scanned {scanned} item(s) in {table} ({region}): indexed {places} place(s) and {users} username(s) that were missing GSI1 keys.");
             return 0;
         }
     default:
