@@ -126,7 +126,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const text = await res.text().catch(() => '');
     // A rejected token is a session-level event, not a screen-level one: drop it and send the user
     // to sign in. Public reads (a profile shared by link) never 401, so this can't loop.
-    if (res.status === 401 && accessToken) onUnauthorized?.();
+    // `invalid_credentials` is the exception: a signed-in request that re-checks the password
+    // (`DELETE /v1/me`) answers it for a WRONG PASSWORD, with the token still perfectly valid —
+    // that is the screen's error to show, not a reason to end the session.
+    if (res.status === 401 && accessToken && errorBody(text) !== 'invalid_credentials') {
+      onUnauthorized?.();
+    }
     throw new ApiError(res.status, `API ${res.status} ${res.statusText}`, text);
   }
   if (res.status === 204) return undefined as T;
@@ -157,6 +162,14 @@ export const api = {
     request<AuthResult>('/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
 
   me: () => request<User>('/v1/me'),
+
+  /**
+   * Delete the signed-in account and everything tied to it — irreversible. The password is asked
+   * again so a stolen token alone cannot wipe an account: a wrong one answers 401
+   * `invalid_credentials` (which does NOT end the session, see `request`).
+   */
+  deleteAccount: (password: string) =>
+    request<{ status: string }>('/v1/me', { method: 'DELETE', body: JSON.stringify({ password }) }),
 
   /** Public: works signed-out. */
   user: (username: string) => request<User>(`/v1/users/${encodeURIComponent(username)}`),

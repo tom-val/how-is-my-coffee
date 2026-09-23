@@ -156,6 +156,15 @@ export async function unregisterPush(): Promise<void> {
   }
 }
 
+/**
+ * Forget this device's token LOCALLY, without telling the API — for when the account is already
+ * gone (`DELETE /v1/me` removed its tokens server-side, and an authenticated DELETE would only
+ * 401). Without it the next account to sign in here would skip registration as "already done".
+ */
+export function forgetPushToken(): void {
+  registeredToken = null;
+}
+
 // ── tap routing ───────────────────────────────────────────────────────────────
 
 /** The `data` every push carries (contract): a type plus whatever the tap target needs. */

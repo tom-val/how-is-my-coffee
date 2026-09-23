@@ -12,6 +12,8 @@ export async function registerForPush(): Promise<void> {}
 
 export async function unregisterPush(): Promise<void> {}
 
+export function forgetPushToken(): void {}
+
 export function initNotificationRouting(): () => void {
   return () => {};
 }

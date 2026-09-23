@@ -1,7 +1,8 @@
+import { useQueryClient } from '@tanstack/react-query';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { api, setAuth, setUnauthorizedHandler } from './api';
-import { registerForPush, unregisterPush } from './push';
+import { forgetPushToken, registerForPush, unregisterPush } from './push';
 import { clearToken, getToken, setToken } from './tokenStorage';
 import type { User } from '@/types';
 
@@ -26,6 +27,11 @@ type AuthValue = {
   signUp: (username: string, displayName: string, password: string) => Promise<void>;
   /** Fire-and-forget: it drops this device's push token first, but callers need not wait. */
   signOut: () => void;
+  /**
+   * Local-only sign-out for an account that no longer exists (after `DELETE /v1/me`): the server
+   * already dropped the push tokens, so there is nothing to tell it — just forget everything here.
+   */
+  signOutDeleted: () => void;
   /** Re-read `/me` — after creating a rating, say, so the caffeine total on the profile is current. */
   refresh: () => Promise<void>;
 };
@@ -50,6 +56,7 @@ const initialToken = getToken();
 setAuth(initialToken);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
   const [token, setTokenState] = useState<string | null>(initialToken);
   const [me, setMe] = useState<User | null>(null);
   const [loading, setLoading] = useState(initialToken !== null);
@@ -77,6 +84,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /**
+   * Drops the session on this device: stored token, API auth header, the signed-in state, and every
+   * cached query — the next person to sign in here must not see the last one's feed, prefs or
+   * profile out of the cache (and after an account deletion none of it exists any more).
+   */
+  const clearSession = useCallback(() => {
+    loadId.current++; // invalidate any in-flight /me so it cannot repopulate `me`
+    clearToken();
+    setAuth(null);
+    setTokenState(null);
+    setMe(null);
+    setLoading(false);
+    queryClient.clear();
+  }, [queryClient]);
+
   const signOut = useCallback(async () => {
     loadId.current++; // invalidate any in-flight /me so it cannot repopulate `me`
     // Before the token goes, not after: the delete is authenticated. Bounded, and it never throws —
@@ -86,12 +108,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       unregisterPush(),
       new Promise<void>((resolve) => setTimeout(resolve, SIGN_OUT_PUSH_BUDGET_MS)),
     ]);
-    clearToken();
-    setAuth(null);
-    setTokenState(null);
-    setMe(null);
-    setLoading(false);
-  }, []);
+    clearSession();
+  }, [clearSession]);
+
+  const signOutDeleted = useCallback(() => {
+    forgetPushToken();
+    clearSession();
+  }, [clearSession]);
 
   // A rejected token ends the session. Registered once; `api.ts` calls it from any 401 that carried
   // a token, so an expired JWT drops the user back to the login screen instead of onto a dead feed.
@@ -151,9 +174,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signUp,
       signOut,
+      signOutDeleted,
       refresh: loadMe,
     }),
-    [loading, token, me, signIn, signUp, signOut, loadMe],
+    [loading, token, me, signIn, signUp, signOut, signOutDeleted, loadMe],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

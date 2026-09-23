@@ -205,5 +205,29 @@
     "configMissing": "Šioje versijoje nenurodytas API adresas (EXPO_PUBLIC_API_URL).",
     "place_search_unavailable": "Kavinių paieška šiame serveryje neįjungta.",
     "place_search_failed": "Kavinių paieška neatsako. Pabandykite po akimirkos."
+  },
+  "legal": {
+    "privacy": "Privatumo politika",
+    "terms": "Naudojimo sąlygos",
+    "support": "Pagalba",
+    "deleteAccount": "Paskyros ištrynimas",
+    "updated": "Atnaujinta {{date}}",
+    "contact": "Klausimai? Rašykite",
+    "signInToDelete": "Prisijungti ir ištrinti",
+    "goToSettings": "Ištrinti nustatymuose",
+    "agreeOnSignUp": "Kurdami paskyrą sutinkate su <terms>naudojimo sąlygomis</terms> ir <privacy>privatumo politika</privacy>."
+  },
+  "deleteAccount": {
+    "title": "Ištrinti paskyrą",
+    "dangerZone": "Pavojinga zona",
+    "hint": "Visam laikui ištrinti paskyrą su visais įvertinimais, nuotraukomis, sekimais, „patinka“ ir komentarais.",
+    "confirmTitle": "Ištrinti paskyrą?",
+    "confirmBody": "Paskyra bus ištrinta visam laikui kartu su viskuo, kas joje yra: įvertinimais ir nuotraukomis, sekimais ir sekėjais, „patinka“ ir komentarais, o jūsų vardas dings iš kavų, kuriose jus pažymėjo kiti. Jūsų vartotojo vardas taps laisvas kitiems. To atšaukti negalima.",
+    "continue": "Tęsti",
+    "passwordTitle": "Patvirtinkite slaptažodžiu",
+    "passwordBody": "Įveskite slaptažodį, kad galutinai ištrintumėte paskyrą.",
+    "submit": "Ištrinti mano paskyrą",
+    "wrongPassword": "Neteisingas slaptažodis.",
+    "done": "Jūsų paskyra ištrinta"
   }
 }

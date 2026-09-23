@@ -23,6 +23,15 @@ export type ChosenPlace = {
 };
 
 /**
+ * The position sent with a café search only biases the results toward nearby cafés, so it is
+ * rounded to 2 decimals (~1 km): precise enough to rank the café around the corner first, and it
+ * keeps the device's exact position out of the request (see the privacy policy, section 3).
+ */
+function approximate(lat: number, lng: number): { lat: number; lng: number } {
+  return { lat: Math.round(lat * 100) / 100, lng: Math.round(lng * 100) / 100 };
+}
+
+/**
  * Picking the cafe: three ways in, in the order people actually use them.
  *
  * 1. Somewhere you have been before — one tap, and it keeps the existing `placeId` so the visit
@@ -92,7 +101,7 @@ export function PlacePicker({
     if (!near.current && previousPlaces.length > 0) {
       const latest = previousPlaces.reduce((a, b) => (b.lastVisited > a.lastVisited ? b : a));
       if (Number.isFinite(latest.lat) && Number.isFinite(latest.lng)) {
-        near.current = { lat: latest.lat, lng: latest.lng };
+        near.current = approximate(latest.lat, latest.lng);
       }
     }
     void (async () => {
@@ -101,7 +110,7 @@ export function PlacePicker({
         if (!permission.granted || cancelled) return;
         const position = await Location.getLastKnownPositionAsync();
         if (position && !cancelled) {
-          near.current = { lat: position.coords.latitude, lng: position.coords.longitude };
+          near.current = approximate(position.coords.latitude, position.coords.longitude);
         }
       } catch {
         // Biasing is a nicety; without it the search is merely less local.
@@ -176,7 +185,7 @@ export function PlacePicker({
         accuracy: Location.Accuracy.Balanced,
       });
       const { latitude, longitude } = position.coords;
-      near.current = { lat: latitude, lng: longitude };
+      near.current = approximate(latitude, longitude);
       // The reverse geocode is a nicety: without it we still have coordinates, and the user can
       // type the cafe's name over whatever we guessed.
       const [address] = await Location.reverseGeocodeAsync({ latitude, longitude }).catch(() => []);

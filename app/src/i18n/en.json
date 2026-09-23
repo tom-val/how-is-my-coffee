@@ -199,5 +199,29 @@
     "configMissing": "This build has no API address configured (EXPO_PUBLIC_API_URL).",
     "place_search_unavailable": "Cafe search is not set up on this server.",
     "place_search_failed": "Cafe search is not answering. Try again in a moment."
+  },
+  "legal": {
+    "privacy": "Privacy policy",
+    "terms": "Terms",
+    "support": "Support",
+    "deleteAccount": "Delete account",
+    "updated": "Last updated {{date}}",
+    "contact": "Questions? Write to",
+    "signInToDelete": "Sign in to delete",
+    "goToSettings": "Go to Settings to delete",
+    "agreeOnSignUp": "By creating an account you agree to the <terms>Terms</terms> and <privacy>Privacy policy</privacy>."
+  },
+  "deleteAccount": {
+    "title": "Delete account",
+    "dangerZone": "Danger zone",
+    "hint": "Permanently delete your account with all its ratings, photos, follows, likes and comments.",
+    "confirmTitle": "Delete your account?",
+    "confirmBody": "This permanently deletes your account and everything in it: your ratings and photos, who you follow and your followers, your likes and comments, and your name on coffees others tagged you in. Your username becomes free for others. This cannot be undone.",
+    "continue": "Continue",
+    "passwordTitle": "Confirm with your password",
+    "passwordBody": "Enter your password to delete your account for good.",
+    "submit": "Delete my account",
+    "wrongPassword": "That password is not right.",
+    "done": "Your account was deleted"
   }
 }

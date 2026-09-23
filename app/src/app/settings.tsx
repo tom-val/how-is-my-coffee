@@ -1,9 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Constants from 'expo-constants';
+import { useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState, Linking, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 
+import { DeleteAccountSection } from '@/components/delete-account';
+import { ChevronRightIcon } from '@/components/icons';
 import {
   Body,
   Button,
@@ -41,10 +44,14 @@ import type { NotificationPrefs } from '@/types';
  *
  * There is not much here, and that is the point: two preferences, what this build is, and sign out.
  * Anything that belongs to the account (the name, the caffeine, the ratings) stays on the profile.
+ *
+ * The legal pages hang off "About", and account deletion sits alone at the very bottom, below sign
+ * out, where nobody reaches it by accident (App Store 5.1.1(v) only needs it to be findable).
  */
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const { signOut } = useAuth();
+  const router = useRouter();
   const appearance = useAppearancePreference();
 
   useDocumentTitle(t('settings.title'));
@@ -117,6 +124,21 @@ export default function SettingsScreen() {
                 {version}
               </Txt>
             </View>
+            {LEGAL_ROWS.map((row) => (
+              <View key={row.label}>
+                <Divider />
+                <Pressable
+                  onPress={() => router.push(row.href)}
+                  accessibilityRole="link"
+                  accessibilityLabel={t(row.label)}
+                  style={({ pressed }) => [s.row, pressed && s.pressed]}>
+                  <Txt variant="label" tone="soft">
+                    {t(row.label)}
+                  </Txt>
+                  <ChevronRightIcon size={18} />
+                </Pressable>
+              </View>
+            ))}
           </View>
         </View>
 
@@ -127,10 +149,19 @@ export default function SettingsScreen() {
             confirmDestructive(t('auth.signOutConfirm'), undefined, t('auth.signOut'), signOut)
           }
         />
+
+        <DeleteAccountSection />
       </Body>
     </View>
   );
 }
+
+/** The in-app legal pages, listed under About. Public routes — they open signed-out too. */
+const LEGAL_ROWS: { href: Href; label: string }[] = [
+  { href: '/privacy', label: 'legal.privacy' },
+  { href: '/terms', label: 'legal.terms' },
+  { href: '/support', label: 'legal.support' },
+];
 
 /** The five push types, in the order they appear on screen. Keys match the contract's DTO. */
 const NOTIFICATION_TYPES = [

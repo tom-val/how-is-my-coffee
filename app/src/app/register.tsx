@@ -1,14 +1,15 @@
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Wordmark } from '@/components/wordmark';
 import { Body, Button, ErrorText, TextField, Txt } from '@/components/ui';
+import { LegalLinks } from '@/features/legal/LegalLinks';
 import { errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { colors, spacing } from '@/theme';
+import { colors, fonts, spacing } from '@/theme';
 
 /** The API's own rule, mirrored here so a bad handle is caught before the round trip. */
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,30}$/;
@@ -85,6 +86,17 @@ export default function RegisterScreen() {
 
           <ErrorText>{error}</ErrorText>
 
+          {/* Store review wants the terms agreed to at sign-up, with both documents one tap away. */}
+          <Txt variant="caption" tone="soft" style={s.centre}>
+            <Trans
+              i18nKey="legal.agreeOnSignUp"
+              components={{
+                terms: <Link href="/terms" style={s.inlineLink} />,
+                privacy: <Link href="/privacy" style={s.inlineLink} />,
+              }}
+            />
+          </Txt>
+
           <Button
             title={t('auth.signUp')}
             onPress={submit}
@@ -98,6 +110,8 @@ export default function RegisterScreen() {
             </Txt>
           </Link>
         </View>
+
+        <LegalLinks />
       </Body>
     </SafeAreaView>
   );
@@ -109,4 +123,5 @@ const s = StyleSheet.create({
   form: { gap: spacing.lg },
   centre: { textAlign: 'center' },
   link: { alignSelf: 'center', paddingVertical: spacing.sm },
+  inlineLink: { color: colors.primary, fontFamily: fonts.semibold },
 });
