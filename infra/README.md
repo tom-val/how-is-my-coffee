@@ -13,7 +13,7 @@ modules/
   api-gateway/            HTTP API, $default → Lambda, no authorizer
   s3-web/                 private bucket for the Expo web export (OAC)
   s3-photos/              private bucket for rating photos (OAC + presigned-PUT CORS)
-  cloudfront/             distribution, OACs, SPA-rewrite function, optional custom domain + ACM
+  cloudfront/             distribution, OACs, SPA-rewrite function, optional custom domain (bring-your-own ACM certificate)
 environments/
   prod/                   root module (its own state key)
 ```
@@ -103,3 +103,21 @@ invalidation.
   is built from `module.gateway.api_id` rather than from the stage's `invoke_url`, and the gateway's
   own CORS config is static `["*"]`. Both details are what keep the graph acyclic — see the comments
   in `environments/prod/main.tf` before changing them.
+
+## Custom domain (e.g. coffee.valiunas.dev)
+
+CloudFront only answers on a hostname it has been told about, with a certificate that covers it.
+Terraform owns the distribution, so a domain added by hand in the console is removed on the next
+apply. To attach one:
+
+1. **Certificate (once, outside Terraform).** AWS console → Certificate Manager, region
+   **us-east-1 (N. Virginia)** (CloudFront only uses certificates from there). Reuse an ISSUED
+   certificate that covers the domain, or request a public certificate for it with DNS validation
+   and create the CNAME it shows at your DNS provider. Wait for status **Issued**; copy its ARN.
+2. **GitHub → Settings → Secrets and variables → Actions → Variables:**
+   `APP_CUSTOM_DOMAIN` = `coffee.valiunas.dev`, `APP_ACM_CERTIFICATE_ARN` = the ARN.
+3. **Deploy** (push to main or run *Deploy prod*). The distribution gets the alias and the
+   certificate, the API's CORS allow-list gains the domain, and the web build uses it as its API
+   origin.
+4. **DNS:** an ALIAS/ANAME (or CNAME for a subdomain) from the domain to the `cloudfront_domain`
+   output.

@@ -26,17 +26,15 @@ variable "google_places_api_key" {
   default     = ""
 }
 
-# Optional custom domain for the web app (e.g. coffee.example.com). Empty ⇒ *.cloudfront.net only.
-# Setting it requests an ACM certificate in us-east-1; see acm_certificate_arn below for the
-# two-step activation.
+# Optional custom domain for the web app (e.g. coffee.valiunas.dev). Empty ⇒ *.cloudfront.net only.
+# In CI it comes from the GitHub variable APP_CUSTOM_DOMAIN.
 variable "custom_domain" {
   type    = string
   default = ""
 }
 
-# ARN of the ISSUED us-east-1 certificate for custom_domain. Leave empty on the first apply, create
-# the DNS records from the `acm_validation_records` output, then set this to `acm_certificate_arn`
-# and apply again — CloudFront refuses an alias whose certificate is still pending validation.
+# ARN of an ISSUED us-east-1 ACM certificate covering custom_domain (created or reused in the ACM
+# console). In CI it comes from the GitHub variable APP_ACM_CERTIFICATE_ARN.
 variable "acm_certificate_arn" {
   type    = string
   default = ""

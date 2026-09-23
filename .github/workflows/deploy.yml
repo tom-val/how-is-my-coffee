@@ -44,6 +44,9 @@ jobs:
           # Optional: without it the caffeine endpoint answers from the static table only.
           TF_VAR_openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           TF_VAR_google_places_api_key: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+          # Optional custom domain: both must be set for CloudFront to serve it (see infra/README.md).
+          TF_VAR_custom_domain: ${{ vars.APP_CUSTOM_DOMAIN }}
+          TF_VAR_acm_certificate_arn: ${{ vars.APP_ACM_CERTIFICATE_ARN }}
         run: |
           terraform init -input=false
           terraform apply -auto-approve -input=false
@@ -122,7 +125,7 @@ jobs:
         env:
           # Same origin as the site itself: CloudFront routes /v1/* and /health to API Gateway,
           # so the browser never makes a cross-origin request.
-          EXPO_PUBLIC_API_URL: https://${{ needs.infra.outputs.cloudfront_domain }}
+          EXPO_PUBLIC_API_URL: ${{ needs.infra.outputs.web_url }}
         run: |
           npm ci
           npm run export:web

@@ -32,13 +32,3 @@ output "web_url" {
   description = "Public URL of the web app"
   value       = local.web_origin
 }
-
-# Only meaningful when custom_domain is set: the CNAMEs to create, then the ARN to feed back into
-# var.acm_certificate_arn once ACM reports ISSUED.
-output "acm_certificate_arn" {
-  value = module.cloudfront.acm_certificate_arn
-}
-
-output "acm_validation_records" {
-  value = module.cloudfront.acm_validation_records
-}

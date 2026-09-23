@@ -34,10 +34,10 @@ variable "custom_domain" {
   default = ""
 }
 
-# ACM certificate ARN (us-east-1) to attach. Deliberately separate from custom_domain: setting
-# custom_domain requests the certificate, but CloudFront rejects an alias whose certificate is not
-# yet ISSUED. So apply once to get the DNS validation records, create them, wait for issuance, then
-# set this to the ARN (the `acm_certificate_arn` output) and apply again.
+# ARN of an ISSUED ACM certificate in us-east-1 that covers custom_domain. The certificate is
+# created (or reused) outside Terraform, once, in the ACM console: CloudFront refuses an alias whose
+# certificate is still pending validation, and managing it here meant a two-apply dance. The alias
+# is attached only when both custom_domain and this ARN are set.
 variable "acm_certificate_arn" {
   type    = string
   default = ""
@@ -57,17 +57,6 @@ locals {
   aliases = var.custom_domain != "" && var.acm_certificate_arn != "" ? [var.custom_domain] : []
 }
 
-resource "aws_acm_certificate" "this" {
-  count             = var.custom_domain == "" ? 0 : 1
-  provider          = aws.us_east_1
-  domain_name       = var.custom_domain
-  validation_method = "DNS"
-  tags              = var.tags
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
 
 resource "aws_cloudfront_origin_access_control" "web" {
   name                              = "${var.name}-frontend-oac"
@@ -211,20 +200,4 @@ output "distribution_arn" {
 
 output "domain_name" {
   value = aws_cloudfront_distribution.this.domain_name
-}
-
-# The certificate to feed back into var.acm_certificate_arn once it is ISSUED.
-output "acm_certificate_arn" {
-  value = var.custom_domain == "" ? "" : aws_acm_certificate.this[0].arn
-}
-
-# CNAME records to create at the DNS provider to validate the certificate.
-output "acm_validation_records" {
-  value = var.custom_domain == "" ? [] : [
-    for o in aws_acm_certificate.this[0].domain_validation_options : {
-      name  = o.resource_record_name
-      type  = o.resource_record_type
-      value = o.resource_record_value
-    }
-  ]
 }
