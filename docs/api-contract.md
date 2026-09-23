@@ -47,6 +47,20 @@ so the web app and native apps can use the CloudFront origin as the API base.
 
 `UserDto = { userId, username, displayName, createdAt, totalCaffeineMg?: number }`
 
+### Account deletion (NEW — App Store 5.1.1(v), Google Play account-deletion policy)
+- `DELETE /v1/me` body `{ password }` → 200 `{ status: "deleted" }`; 401 `invalid_credentials` when the password is wrong (re-auth, so a stolen
+  token alone cannot wipe an account); 401 `unauthorized` without a token. Irreversible, and it removes everything tied to the user:
+  - profile row, `USERNAME#` lookup (the username becomes free again), `PUSH#` tokens, `notificationPrefs`;
+  - every `FRIEND#` and `FOLLOWER#` row on their partition AND the mirror rows on the other users' partitions;
+  - every rating they authored, exactly as `DELETE /v1/ratings/{id}` does (all three copies, likes, comments, companions' `TAGGED#` rows,
+    `USER#…/PLACE#` rows, place stats recomputed) plus the rating's photo object in S3;
+  - their likes and comments on OTHER people's ratings (rows removed, `likeCount`/`commentCount` decremented on all three copies of that rating);
+  - their `TAGGED#` rows, and their entry in the `companions` list of other people's ratings (removed from all three copies — the
+    remaining companions stay).
+  - Finding likes/comments on others' ratings has no index, so it is one table scan filtered on `userId` — acceptable at this scale and documented.
+  - Tokens already issued stay cryptographically valid for up to 30 days but resolve to no profile: every authenticated endpoint must then
+    answer 401 `unauthorized` (the app signs out).
+
 ### Friends (following model, unchanged semantics)
 - `GET /v1/friends` → `{ friends: FriendDto[] }` (people I follow)
 - `GET /v1/followers` → `{ followers: FollowerDto[] }`
