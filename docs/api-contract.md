@@ -61,6 +61,36 @@ so the web app and native apps can use the CloudFront origin as the API base.
   - Tokens already issued stay cryptographically valid for up to 30 days but resolve to no profile: every authenticated endpoint must then
     answer 401 `unauthorized` (the app signs out).
 
+### Safety: reports, blocks, content filter (NEW — App Store 1.2, Google Play UGC policy)
+**Reports**
+- `POST /v1/reports` body `{ targetType: "rating" | "comment" | "user", targetId, ratingId?, reason: "spam" | "offensive" | "harassment" | "other", details? }`
+  → 201 `{ reportId }`. `targetId` is the ratingId / commentId / userId; comments also need `ratingId`. 404 `not_found` when the target does not
+  exist, 400 `cannot_report_self` for your own content/account, `details` ≤ 500 chars. One open report per (reporter, target): re-reporting is
+  idempotent (200 with the existing id). Auth required.
+- Storage: `PK=REPORT#<reportId> SK=META` `{ reportId, reporterUserId, reporterUsername, targetType, targetId, ratingId?, targetUserId,
+  targetUsername, reason, details?, excerpt (≤200 chars of the reported text or drink/notes), status: "open", createdAt }` with
+  `GSI1PK="REPORT"`, `GSI1SK=<createdAt>`.
+- On every new report the API sends an Expo push to the moderators (`Moderation:NotifyUsernames`, comma-separated usernames; default empty =
+  log only) — title "New report: <targetType>", body "<reason> · @<targetUsername>: <excerpt>". Moderation happens through
+  `backend/tools/Coffee.Admin` (`list-reports`, `remove-rating <ratingId>`, `remove-comment <ratingId> <commentId>`, `resolve-report <reportId>`,
+  `delete-account <username>`), also exposed in the Admin (manual) GitHub workflow.
+
+**Blocks**
+- `POST /v1/blocks` body `{ username }` → 201 `{ userId, username, displayName, blockedAt }`; 400 `cannot_block_self`; idempotent.
+- `DELETE /v1/blocks/{userId}` → 200 `{ status: "deleted" }` (idempotent). `GET /v1/blocks` → `{ blocks: BlockDto[] }`.
+- Storage: `USER#<blocker>/BLOCK#<blocked>` `{ userId, username, displayName, blockedAt }` and the mirror `USER#<blocked>/BLOCKEDBY#<blocker>`.
+- Blocking removes follows in both directions. While a block exists (either direction):
+  - the blocked person's ratings, comments and likes are hidden from the blocker everywhere (feed, user/place rating lists, rating detail
+    likes + comments, Discover friend counts, search results, companion search) and vice versa;
+  - neither can follow, tag as a companion, like, or comment on the other's ratings → 403 `blocked`; `GET /v1/users/{username}` of a blocked/
+    blocking user → 404 `user_not_found` for the other side.
+- Account deletion also removes BLOCK#/BLOCKEDBY# rows on both sides and the user's own reports.
+
+**Content filter**
+- Free text that others see (display name, username, drink name, notes, comment text, guest companion names) is checked against a small
+  word list of slurs/explicit abuse (en + lt, `Shared/Moderation/ContentFilter.cs`, whole-word, case/diacritic-insensitive). A hit → 400
+  `objectionable_content`. Deliberately narrow: it blocks the obvious; reports + moderation handle the rest.
+
 ### Friends (following model, unchanged semantics)
 - `GET /v1/friends` → `{ friends: FriendDto[] }` (people I follow)
 - `GET /v1/followers` → `{ followers: FollowerDto[] }`
@@ -183,6 +213,8 @@ Notification types (all ON by default; each can be switched off in Settings):
 | Friend | `USER#<userId>` | `FRIEND#<friendUserId>` |
 | Follower | `USER#<userId>` | `FOLLOWER#<followerUserId>` |
 | Push token (NEW) | `USER#<userId>` | `PUSH#<expoPushToken>` |
+| Block / blocked-by (NEW) | `USER#<userId>` | `BLOCK#<blockedId>` / `BLOCKEDBY#<blockerId>` |
+| Report (NEW) | `REPORT#<reportId>` | `META` (+ `GSI1PK="REPORT"`, `GSI1SK=<createdAt>`) |
 | Tagged (NEW) | `USER#<userId>` | `TAGGED#<createdAt>#<ratingId>` |
 | Rating detail | `RATING#<ratingId>` | `META` |
 | Like | `RATING#<ratingId>` | `LIKE#<userId>` |
