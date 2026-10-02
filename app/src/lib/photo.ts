@@ -1,5 +1,8 @@
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+
+import { Platform } from 'react-native';
 
 import { api } from './api';
 
@@ -66,9 +69,10 @@ async function downscale(uri: string, width: number, height: number): Promise<Pi
 /**
  * Upload a picked photo and return its S3 key, which the caller sends as `photoKey`.
  *
- * Reading the local file back as a Blob (rather than base64) keeps the PUT a plain binary body on
- * every platform: on native `fetch` resolves `file://` through XMLHttpRequest, on web the picker
- * already hands back a blob URL.
+ * Native uploads the file as raw bytes with `FileSystem.uploadAsync`; web sends a Blob through
+ * `fetch`. Not `fetch` + Blob everywhere: React Native's Blob body on iOS/Android does not reliably
+ * reproduce the bytes and the exact `Content-Type` the URL was signed for, and S3 answers 403
+ * (SignatureDoesNotMatch) — the kindergarten app hit and fixed the same thing this way.
  */
 export async function uploadPhoto(photo: PickedPhoto): Promise<string> {
   const fileName = `coffee-${Date.now()}.jpg`;
@@ -76,13 +80,24 @@ export async function uploadPhoto(photo: PickedPhoto): Promise<string> {
 
   const target = await api.uploadUrl({ fileName, contentType });
 
-  const blob = await (await fetch(photo.uri)).blob();
-  const res = await fetch(target.uploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': contentType },
-    body: blob,
-  });
-  if (!res.ok) throw new Error(`Photo upload failed (${res.status})`);
+  let status: number;
+  if (Platform.OS === 'web') {
+    const blob = await (await fetch(photo.uri)).blob();
+    const res = await fetch(target.uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': contentType },
+      body: blob,
+    });
+    status = res.status;
+  } else {
+    const res = await FileSystem.uploadAsync(target.uploadUrl, photo.uri, {
+      httpMethod: 'PUT',
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      headers: { 'Content-Type': contentType },
+    });
+    status = res.status;
+  }
+  if (status < 200 || status >= 300) throw new Error(`Photo upload failed (${status})`);
 
   return target.key;
 }
