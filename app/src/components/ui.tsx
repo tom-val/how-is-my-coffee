@@ -381,6 +381,7 @@ export function Sheet({
   onClose,
   title,
   compact,
+  onDismiss,
   children,
 }: {
   visible: boolean;
@@ -388,6 +389,8 @@ export function Sheet({
   title: string;
   /** Size to the content (short menus) instead of the full 88% height. */
   compact?: boolean;
+  /** iOS: the modal has finished sliding away — the moment it is safe to present another one. */
+  onDismiss?: () => void;
   children: React.ReactNode;
 }) {
   const { t } = useTranslation();
@@ -402,7 +405,12 @@ export function Sheet({
   }));
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      onDismiss={onDismiss}>
       <Animated.View style={[s.sheetBackdrop, liftAboveKeyboard]}>
         <Backdrop onPress={onClose} />
         <View style={[s.sheet, compact && s.sheetCompact]}>

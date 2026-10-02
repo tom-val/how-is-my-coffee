@@ -35,6 +35,7 @@ const EN: LegalDoc = {
             'Photos — a photo you choose to attach to a rating. The app shrinks and re-encodes it on your device before upload, which removes hidden metadata such as the GPS position the camera may have recorded.',
             'Companions — the people you tag as having had coffee with you: either a registered user (by username) or a free-text name you type for a guest. If someone tags you, your username and display name appear on their rating and in your "Coffees with me".',
             'Social activity — who you follow and who follows you, the ratings you like, and the comments you write.',
+            'Reports and blocks — when you report a rating, a comment or a user, we store who reported what, the reason you chose, any details you wrote, and a short excerpt of the reported text; the moderator is notified on their phone through Expo. When you block someone, we store who blocked whom and when.',
             'Notifications — on a phone where you allow notifications: the push token that addresses this app on your device, whether the device is iOS or Android, and your notification preferences (which of the five kinds of notification you want).',
             'Technical logs — our server keeps short-lived logs of requests (such as the time, the endpoint called and any error) to run the service, fix faults and prevent abuse. Our hosting provider necessarily sees your IP address when your device connects.',
           ],
@@ -67,6 +68,7 @@ const EN: LegalDoc = {
             'Your ratings — with their drink, stars, notes, caffeine, photo, café and companions — and your likes and comments are visible to other signed-in users of Kavutė: in the feed of people who follow you, on café pages and on your profile.',
             'Who you follow and who follows you is visible to you; the people you follow see that you follow them.',
             'Your password hash, your push tokens and your notification preferences are never shown to anyone.',
+            'Your reports are seen only by us, for moderation; the person you report is not told who reported them. A person you block is not told either — they simply stop seeing your ratings and comments, and you theirs.',
           ],
         },
       ],
@@ -78,6 +80,7 @@ const EN: LegalDoc = {
           bullets: [
             'To provide the app you signed up for: keep your account, show your ratings, feed, map, caffeine totals and friends, and send the notifications you asked for (legal basis: performance of our contract with you, GDPR Art. 6(1)(b)).',
             'To keep the service secure and working: sign-in checks, abuse prevention, fixing bugs (legal basis: our legitimate interest in running a safe, working service, Art. 6(1)(f)).',
+            'To keep Kavutė free of abuse: reviewing reports, removing content that breaks the Terms, enforcing blocks, and rejecting slurs in public text. Reports and blocks are used only for this moderation, never for anything else (legal basis: our legitimate interest in a safe community, and our contract with you, Art. 6(1)(f) and (b)).',
             'Location, camera, photo library and notifications are used only after you allow them in the device’s permission prompt, and you can withdraw that permission at any time in your device settings (Art. 6(1)(a)).',
           ],
         },
@@ -121,7 +124,7 @@ const EN: LegalDoc = {
         {
           bullets: [
             'Everything in your account is kept until you delete it. Deleting a rating removes it, its photo, its likes and comments straight away.',
-            'Deleting your account (Settings → Delete account) immediately removes your profile, username, password hash, push tokens and notification preferences, all your ratings and their photos, your follows and followers, your likes and comments on other people’s ratings, and your name from ratings where others tagged you.',
+            'Deleting your account (Settings → Delete account) immediately removes your profile, username, password hash, push tokens and notification preferences, all your ratings and their photos, your follows and followers, your likes and comments on other people’s ratings, your name from ratings where others tagged you, the reports you filed, and your blocks (the people you blocked and the blocks others placed on you).',
             `Our database keeps automatic backups for disaster recovery for up to ${BACKUP_DAYS} days; deleted data disappears from them when they roll off. Server logs are kept for 14 days.`,
             'A push token is also removed when you sign out on that device, or when Apple or Google tells us it is no longer valid.',
           ],
@@ -202,6 +205,7 @@ const LT: LegalDoc = {
             'Nuotraukos — nuotrauka, kurią pasirenkate pridėti prie įvertinimo. Prieš įkeliant programėlė ją sumažina ir perkoduoja jūsų įrenginyje, todėl pašalinami paslėpti metaduomenys, pavyzdžiui, fotoaparato užfiksuota GPS vieta.',
             'Kompanionai — žmonės, kuriuos pažymite kaip gėrusius kavą su jumis: registruotas vartotojas (pagal vartotojo vardą) arba svečio vardas, kurį įrašote patys. Jei kas nors pažymi jus, jūsų vartotojo vardas ir rodomas vardas matomi jo įvertinime ir jūsų skiltyje „Kavos su manimi“.',
             'Socialinė veikla — ką sekate ir kas seka jus, kuriems įvertinimams paspaudėte „patinka“ ir kokius komentarus parašėte.',
+            'Pranešimai apie turinį ir blokavimai — kai pranešate apie įvertinimą, komentarą ar vartotoją, saugome, kas apie ką pranešė, pasirinktą priežastį, jūsų parašytą paaiškinimą ir trumpą ištrauką iš teksto, apie kurį pranešta; moderatoriui apie tai pranešama telefonu per „Expo“. Kai ką nors užblokuojate, saugome, kas ką ir kada užblokavo.',
             'Pranešimai — telefone, kuriame leidote pranešimus: pranešimų prieigos raktas (push token), kuriuo adresuojama programėlė jūsų įrenginyje, ar įrenginys yra „iOS“, ar „Android“, ir jūsų pranešimų nustatymai (kurių iš penkių rūšių pranešimų norite).',
             'Techniniai žurnalai — mūsų serveris trumpai saugo užklausų įrašus (pvz., laiką, iškviestą adresą ir klaidas), kad paslauga veiktų, būtų galima taisyti gedimus ir užkirsti kelią piktnaudžiavimui. Jūsų įrenginiui jungiantis, prieglobos paslaugų teikėjas neišvengiamai mato jūsų IP adresą.',
           ],
@@ -234,6 +238,7 @@ const LT: LegalDoc = {
             'Jūsų įvertinimus — su gėrimu, žvaigždutėmis, pastabomis, kofeinu, nuotrauka, kavine ir kompanionais — bei jūsų „patinka“ ir komentarus mato kiti prisijungę „Kavutės“ vartotojai: jus sekančiųjų naujienų sraute, kavinių puslapiuose ir jūsų profilyje.',
             'Ką sekate ir kas seka jus, matote jūs; tie, kuriuos sekate, mato, kad juos sekate.',
             'Jūsų slaptažodžio maiša, pranešimų prieigos raktai ir pranešimų nustatymai niekam nerodomi.',
+            'Jūsų pranešimus apie turinį matome tik mes, moderavimui; žmogui, apie kurį pranešėte, nesakoma, kas pranešė. Užblokuotam žmogui taip pat nepranešama — jis tiesiog nebemato jūsų įvertinimų ir komentarų, o jūs — jo.',
           ],
         },
       ],
@@ -245,6 +250,7 @@ const LT: LegalDoc = {
           bullets: [
             'Kad teiktume programėlę, kuria užsiregistravote: išlaikytume jūsų paskyrą, rodytume įvertinimus, naujienų srautą, žemėlapį, kofeino sumas ir draugus bei siųstume jūsų pageidaujamus pranešimus (teisinis pagrindas: sutarties su jumis vykdymas, BDAR 6 str. 1 d. b p.).',
             'Kad paslauga būtų saugi ir veiktų: prisijungimo patikros, piktnaudžiavimo prevencija, klaidų taisymas (teisinis pagrindas: mūsų teisėtas interesas teikti saugią, veikiančią paslaugą, 6 str. 1 d. f p.).',
+            'Kad „Kavutėje“ nebūtų piktnaudžiavimo: peržiūrime pranešimus, šaliname sąlygas pažeidžiantį turinį, užtikriname blokavimus ir atmetame įžeidžiančius žodžius viešame tekste. Pranešimai ir blokavimai naudojami tik šiam moderavimui ir niekam kitam (teisinis pagrindas: mūsų teisėtas interesas užtikrinti saugią bendruomenę ir sutartis su jumis, 6 str. 1 d. f ir b p.).',
             'Buvimo vieta, kamera, nuotraukų biblioteka ir pranešimai naudojami tik jums leidus įrenginio leidimo lange; leidimą galite bet kada atšaukti įrenginio nustatymuose (6 str. 1 d. a p.).',
           ],
         },
@@ -288,7 +294,7 @@ const LT: LegalDoc = {
         {
           bullets: [
             'Visa, kas yra jūsų paskyroje, saugoma, kol to neištrinate. Ištrynus įvertinimą, iš karto pašalinamas jis, jo nuotrauka, „patinka“ ir komentarai.',
-            'Ištrynus paskyrą (Nustatymai → Ištrinti paskyrą), iš karto pašalinamas jūsų profilis, vartotojo vardas, slaptažodžio maiša, pranešimų prieigos raktai ir nustatymai, visi jūsų įvertinimai ir jų nuotraukos, jūsų sekimai ir sekėjai, jūsų „patinka“ ir komentarai prie kitų įvertinimų, o jūsų vardas pašalinamas iš įvertinimų, kuriuose jus pažymėjo kiti.',
+            'Ištrynus paskyrą (Nustatymai → Ištrinti paskyrą), iš karto pašalinamas jūsų profilis, vartotojo vardas, slaptažodžio maiša, pranešimų prieigos raktai ir nustatymai, visi jūsų įvertinimai ir jų nuotraukos, jūsų sekimai ir sekėjai, jūsų „patinka“ ir komentarai prie kitų įvertinimų, jūsų pateikti pranešimai apie turinį ir jūsų blokavimai (ir tie, kuriuos atlikote jūs, ir tie, kuriais kiti užblokavo jus), o jūsų vardas pašalinamas iš įvertinimų, kuriuose jus pažymėjo kiti.',
             `Mūsų duomenų bazė atkūrimui po avarijų automatiškai saugo atsargines kopijas iki ${BACKUP_DAYS} dienų; ištrinti duomenys iš jų išnyksta, kai šios kopijos pasensta. Serverio žurnalai saugomi 14 dienų.`,
             'Pranešimų prieigos raktas taip pat pašalinamas, kai tame įrenginyje atsijungiate arba kai „Apple“ ar „Google“ praneša, kad jis nebegalioja.',
           ],

@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/empty-state';
 import { CupIcon, GearIcon, PinIcon } from '@/components/icons';
 import { PlaceRow } from '@/components/place-row';
 import { RatingCard } from '@/components/rating-card';
+import { useSafetyMenu } from '@/components/safety-menu';
 import { SkeletonFeed, SkeletonRow } from '@/components/skeleton';
 import { Divider, IconButton, SegmentedRow, Txt } from '@/components/ui';
 import { api, errorMessage, PAGE_SIZE } from '@/lib/api';
@@ -64,6 +65,9 @@ export default function ProfileScreen() {
     qk.userTagged(username),
     qk.feed(),
   ]);
+
+  // "Coffees with me" holds other people's ratings: those get the report / block menu.
+  const safety = useSafetyMenu();
 
   if (!me) return <View style={s.screen} />;
 
@@ -188,6 +192,17 @@ export default function ProfileScreen() {
                   rating={r}
                   liked={tagged.data?.likedRatingIds.includes(r.ratingId)}
                   onToggleLike={toggleLike}
+                  onMore={
+                    r.userId !== me.userId
+                      ? () =>
+                          safety.open({
+                            kind: 'rating',
+                            ratingId: r.ratingId,
+                            userId: r.userId,
+                            username: r.username,
+                          })
+                      : undefined
+                  }
                 />
               ))}
             </View>
@@ -195,6 +210,7 @@ export default function ProfileScreen() {
         ) : null}
 
       </ScrollView>
+      {safety.element}
     </SafeAreaView>
   );
 }

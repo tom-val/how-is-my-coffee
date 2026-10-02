@@ -11,6 +11,7 @@
 import { config } from './config';
 import type {
   AuthResult,
+  Block,
   CaffeineResolution,
   CaffeineStats,
   Comment,
@@ -26,6 +27,7 @@ import type {
   Rating,
   RatingDetail,
   RatingPage,
+  ReportInput,
   UpdateRatingInput,
   UploadTarget,
   User,
@@ -204,6 +206,26 @@ export const api = {
     request<{ status: string }>(`/v1/friends/${encodeURIComponent(friendUserId)}`, {
       method: 'DELETE',
     }),
+
+  // ── safety: reports, blocks ───────────────────────────────────────────────
+  /**
+   * Report a rating, a comment or a user to the moderators. Idempotent per (me, target): reporting
+   * the same thing twice answers 200 with the first report's id. 400 `cannot_report_self` is never
+   * expected — the action is hidden on my own content.
+   */
+  report: (body: ReportInput) =>
+    request<{ reportId: string }>('/v1/reports', { method: 'POST', body: JSON.stringify(body) }),
+
+  /** The people I have blocked. */
+  blocks: () => request<{ blocks: Block[] }>('/v1/blocks'),
+
+  /** Block by username. Idempotent; also removes follows both ways. */
+  block: (username: string) =>
+    request<Block>('/v1/blocks', { method: 'POST', body: JSON.stringify({ username }) }),
+
+  /** Idempotent. Follows removed by the block are NOT restored. */
+  unblock: (userId: string) =>
+    request<{ status: string }>(`/v1/blocks/${encodeURIComponent(userId)}`, { method: 'DELETE' }),
 
   // ── ratings ───────────────────────────────────────────────────────────────
   feed: (opts?: { limit?: number; cursor?: string | null }) =>

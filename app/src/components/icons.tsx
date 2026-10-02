@@ -329,3 +329,40 @@ export function CrosshairIcon({ size = 24, color = colors.primary }: IconProps) 
     </Svg>
   );
 }
+
+/** The "⋯" overflow — report / block menus on other people's ratings, comments and profiles. */
+export function MoreIcon({ size = 24, color = colors.inkSoft }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={5.5} cy={12} r={1.7} fill={color} />
+      <Circle cx={12} cy={12} r={1.7} fill={color} />
+      <Circle cx={18.5} cy={12} r={1.7} fill={color} />
+    </Svg>
+  );
+}
+
+/** Report — a flag on a pole. */
+export function FlagIcon({ size = 24, color = colors.inkSoft }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M5.5 21V4" stroke={color} strokeWidth={STROKE} strokeLinecap="round" />
+      <Path
+        d="M5.5 4.5h11l-2.2 3.8 2.2 3.8h-11"
+        stroke={color}
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** Block — a circle with a bar through it. */
+export function BlockIcon({ size = 24, color = colors.inkSoft }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={12} r={8} stroke={color} strokeWidth={STROKE} />
+      <Path d="M6.4 17.6L17.6 6.4" stroke={color} strokeWidth={STROKE} strokeLinecap="round" />
+    </Svg>
+  );
+}

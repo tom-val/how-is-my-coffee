@@ -105,6 +105,22 @@ export default function SettingsScreen() {
         <NotificationsSection />
 
         <View style={s.section}>
+          <SectionTitle>{t('settings.safety')}</SectionTitle>
+          <View style={s.card}>
+            <Pressable
+              onPress={() => router.push('/blocked')}
+              accessibilityRole="link"
+              accessibilityLabel={t('safety.blockedUsers')}
+              style={({ pressed }) => [s.row, pressed && s.pressed]}>
+              <Txt variant="label" tone="soft">
+                {t('safety.blockedUsers')}
+              </Txt>
+              <ChevronRightIcon size={18} />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={s.section}>
           <SectionTitle>{t('settings.about')}</SectionTitle>
           <View style={s.card}>
             <View style={s.row}>

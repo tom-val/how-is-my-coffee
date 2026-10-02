@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Avatar } from './avatar';
 import { CompanionChips } from './companion-chips';
 import { CommentIcon, CupIcon, HeartIcon } from './icons';
+import { MoreButton } from './safety-menu';
 import { StarRating } from './star-rating';
 import { Txt } from './ui';
 import { formatAge } from '@/lib/format';
@@ -26,12 +27,15 @@ export function RatingCard({
   onToggleLike,
   showAuthor = true,
   showPlace = true,
+  onMore,
 }: {
   rating: Rating;
   liked?: boolean;
   onToggleLike?: (ratingId: string) => void;
   showAuthor?: boolean;
   showPlace?: boolean;
+  /** The "⋯" (report / block). Passed only for someone else's rating while signed in. */
+  onMore?: (rating: Rating) => void;
 }) {
   const router = useRouter();
   const { t, i18n } = useTranslation();
@@ -86,6 +90,7 @@ export function RatingCard({
             <Txt variant="caption" tone="faint">
               {formatAge(rating.createdAt, i18n.language)}
             </Txt>
+            {onMore ? <MoreButton onPress={() => onMore(rating)} /> : null}
           </View>
 
           <View style={s.metaRow}>

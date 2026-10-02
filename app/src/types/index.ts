@@ -227,3 +227,27 @@ export interface NotificationPrefs {
   /** Someone I follow posted a rating. */
   friendRating: boolean;
 }
+
+// ── safety: reports, blocks ─────────────────────────────────────────────────
+
+/** What a report points at. `targetId` is the ratingId / commentId / userId. */
+export type ReportTargetType = 'rating' | 'comment' | 'user';
+
+export type ReportReason = 'spam' | 'offensive' | 'harassment' | 'other';
+
+/** Body of `POST /v1/reports`. A comment also needs its `ratingId`; `details` ≤ 500 chars. */
+export interface ReportInput {
+  targetType: ReportTargetType;
+  targetId: string;
+  ratingId?: string;
+  reason: ReportReason;
+  details?: string;
+}
+
+/** Someone I have blocked — `POST /v1/blocks`, `GET /v1/blocks`. */
+export interface Block {
+  userId: string;
+  username: string;
+  displayName: string;
+  blockedAt: string;
+}

@@ -6,9 +6,11 @@ import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
 
 import { CupIcon } from './icons';
 import { RatingCard } from './rating-card';
+import { useSafetyMenu } from './safety-menu';
 import { SkeletonFeed } from './skeleton';
 import { EmptyState } from './empty-state';
 import { PAGE_SIZE, errorMessage } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import type { QueryKey } from '@/lib/queryKeys';
 import { useToggleLike } from '@/lib/useToggleLike';
 import { colors, spacing } from '@/theme';
@@ -51,6 +53,9 @@ export function RatingList({
   showPlace?: boolean;
 }) {
   const { t } = useTranslation();
+  const { me } = useAuth();
+  // One report/block menu for the whole list (see `useSafetyMenu`).
+  const safety = useSafetyMenu();
 
   const query = useInfiniteQuery({
     queryKey: queryKey as unknown[],
@@ -96,6 +101,7 @@ export function RatingList({
   }
 
   return (
+    <>
     <FlatList
       data={ratings}
       keyExtractor={(r) => r.ratingId}
@@ -108,6 +114,17 @@ export function RatingList({
           onToggleLike={toggleLike}
           showAuthor={showAuthor}
           showPlace={showPlace}
+          onMore={
+            me && item.userId !== me.userId
+              ? (r) =>
+                  safety.open({
+                    kind: 'rating',
+                    ratingId: r.ratingId,
+                    userId: r.userId,
+                    username: r.username,
+                  })
+              : undefined
+          }
         />
       )}
       ItemSeparatorComponent={() => <View style={s.gap} />}
@@ -134,6 +151,8 @@ export function RatingList({
       refreshing={query.isRefetching && !query.isFetchingNextPage}
       onRefresh={() => void query.refetch()}
     />
+    {safety.element}
+    </>
   );
 }
 

@@ -27,6 +27,8 @@ export const qk = {
   mapPlaces: (bbox: string, friends: boolean) => ['mapPlaces', bbox, friends] as const,
   /** The five push notification switches on the Settings screen. */
   notificationPrefs: () => ['notificationPrefs'] as const,
+  /** The people I have blocked (Settings → Blocked users, and the block state on a profile). */
+  blocks: () => ['blocks'] as const,
 };
 
 /** Read-only key type — `unknown[]` is what `queryClient.setQueryData` wants. */

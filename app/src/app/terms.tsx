@@ -51,10 +51,21 @@ const EN: LegalDoc = {
       ],
     },
     {
-      heading: '5. When rules are broken',
+      heading: '5. Zero tolerance for objectionable content and abusive users',
       blocks: [
         {
-          p: `We may remove content, and suspend or delete accounts, that break these terms or the law. If you see something that does, write to ${CONTACT}.`,
+          p: 'Kavutė has zero tolerance for objectionable content and for abusive users. Anything that breaks section 4 or the law is removed, and the accounts that post it or abuse other people are suspended or deleted — without warning when the abuse is serious.',
+        },
+        {
+          bullets: [
+            'Report: tap “⋯” on any rating, comment or profile (or long-press a comment) and choose Report. Pick a reason and, if you like, add details.',
+            'Block: from the same menu you can block a person. You stop seeing each other’s ratings and comments, and they can no longer follow you, tag you or comment on your coffees. They are not told. You can unblock them in Settings → Blocked users.',
+            'We review every report within 24 hours, remove the content that breaks these terms, and suspend or delete the account that posted it.',
+            'Names, drink names, notes and comments are also checked automatically against a list of slurs and explicit abuse, and text that matches it cannot be posted.',
+          ],
+        },
+        {
+          p: `You can also write to ${CONTACT} about anything you see in Kavutė.`,
         },
       ],
     },
@@ -159,10 +170,21 @@ const LT: LegalDoc = {
       ],
     },
     {
-      heading: '5. Kai taisyklės pažeidžiamos',
+      heading: '5. Nulinė tolerancija netinkamam turiniui ir piktnaudžiaujantiems vartotojams',
       blocks: [
         {
-          p: `Galime pašalinti turinį ir sustabdyti ar ištrinti paskyras, pažeidžiančias šias sąlygas ar įstatymus. Jei pastebėjote tokį turinį, rašykite ${CONTACT}.`,
+          p: '„Kavutė“ netoleruoja jokio netinkamo turinio ir piktnaudžiaujančių vartotojų. Viskas, kas pažeidžia 4 skyrių ar įstatymus, pašalinama, o paskyros, kurios tai skelbia ar įžeidinėja kitus, sustabdomos arba ištrinamos — rimtais atvejais be įspėjimo.',
+        },
+        {
+          bullets: [
+            'Pranešimas: bet kurio įvertinimo, komentaro ar profilio meniu „⋯“ (arba ilgai paspaudę komentarą) pasirinkite „Pranešti“. Nurodykite priežastį ir, jei norite, parašykite daugiau.',
+            'Blokavimas: tame pačiame meniu galite užblokuoti žmogų. Nebematysite vienas kito įvertinimų ir komentarų, o jis nebegalės jūsų sekti, pažymėti ar komentuoti jūsų kavos. Jam apie tai nepranešama. Atblokuoti galite skiltyje Nustatymai → Užblokuoti vartotojai.',
+            'Kiekvieną pranešimą peržiūrime per 24 valandas, pašaliname šias sąlygas pažeidžiantį turinį ir sustabdome arba ištriname jį paskelbusią paskyrą.',
+            'Vardai, gėrimų pavadinimai, pastabos ir komentarai taip pat automatiškai tikrinami pagal įžeidžiančių ir vulgarių žodžių sąrašą — juos atitinkančio teksto paskelbti negalima.',
+          ],
+        },
+        {
+          p: `Apie bet ką, ką matote „Kavutėje“, taip pat galite parašyti ${CONTACT}.`,
         },
       ],
     },

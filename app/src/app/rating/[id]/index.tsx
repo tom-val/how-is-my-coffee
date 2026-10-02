@@ -12,6 +12,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { Avatar } from '@/components/avatar';
 import { CompanionChips } from '@/components/companion-chips';
+import { MoreButton, useSafetyMenu } from '@/components/safety-menu';
 import { EmptyState } from '@/components/empty-state';
 import { CommentIcon, CupIcon, HeartIcon, PencilIcon, PinIcon, TrashIcon } from '@/components/icons';
 import { SkeletonFeed } from '@/components/skeleton';
@@ -48,6 +49,15 @@ export default function RatingDetailScreen() {
   const { me } = useAuth();
 
   const [comment, setComment] = useState('');
+  const [commentError, setCommentError] = useState('');
+
+  // Report / block for someone else's rating or comment. Blocking the rating's author leaves the
+  // screen — their rating is about to vanish everywhere; blocking a commenter just drops the comment.
+  const safety = useSafetyMenu({
+    onBlocked: (subject) => {
+      if (subject.kind === 'rating') goBack();
+    },
+  });
 
   const detail = useQuery({
     queryKey: qk.rating(id),
@@ -62,12 +72,15 @@ export default function RatingDetailScreen() {
 
   const addComment = useMutation({
     mutationFn: (text: string) => api.addComment(id, text),
+    onMutate: () => setCommentError(''),
     onSuccess: () => {
       setComment('');
       void queryClient.invalidateQueries({ queryKey: qk.rating(id) });
       void queryClient.invalidateQueries({ queryKey: qk.feed() });
     },
-    onError: (e) => showToast(errorMessage(e, t)),
+    // Inline, under the field: "that text isn't allowed" or "you can't comment here" has to stay
+    // next to the text it is about, not vanish with a toast.
+    onError: (e) => setCommentError(errorMessage(e, t)),
   });
 
   const remove = useMutation({
@@ -153,6 +166,18 @@ export default function RatingDetailScreen() {
                 <TrashIcon size={18} color={colors.bad} />
               </IconButton>
             </>
+          ) : me ? (
+            <MoreButton
+              tone="soft"
+              onPress={() =>
+                safety.open({
+                  kind: 'rating',
+                  ratingId: rating.ratingId,
+                  userId: rating.userId,
+                  username: rating.username,
+                })
+              }
+            />
           ) : null
         }
       />
@@ -277,9 +302,27 @@ export default function RatingDetailScreen() {
               </Txt>
             ) : (
               <View style={s.group}>
-                {comments.map((c, i) => (
+                {comments.map((c, i) => {
+                  // Someone else's comment, while signed in: long-press or "⋯" → report / block.
+                  const openMenu =
+                    me && c.userId !== me.userId
+                      ? () =>
+                          safety.open({
+                            kind: 'comment',
+                            ratingId: rating.ratingId,
+                            commentId: c.commentId,
+                            userId: c.userId,
+                            username: c.username,
+                          })
+                      : undefined;
+                  return (
                   <View key={c.commentId}>
-                    <View style={s.comment}>
+                    <Pressable
+                      onLongPress={openMenu}
+                      disabled={!openMenu}
+                      delayLongPress={350}
+                      accessible={false}
+                      style={s.comment}>
                       <Avatar name={c.displayName} seed={c.username} size={32} />
                       <View style={s.flex}>
                         <Txt variant="label">{c.displayName}</Txt>
@@ -290,10 +333,12 @@ export default function RatingDetailScreen() {
                           {formatDate(c.createdAt, i18n.language)}
                         </Txt>
                       </View>
-                    </View>
+                      {openMenu ? <MoreButton onPress={openMenu} size={18} /> : null}
+                    </Pressable>
                     {i < comments.length - 1 ? <Divider inset={spacing.lg + 32 + spacing.md} /> : null}
                   </View>
-                ))}
+                  );
+                })}
               </View>
             )}
 
@@ -301,10 +346,14 @@ export default function RatingDetailScreen() {
               <TextField
                 placeholder={t('rating.commentPlaceholder')}
                 value={comment}
-                onChangeText={setComment}
+                onChangeText={(value) => {
+                  setComment(value);
+                  if (commentError) setCommentError('');
+                }}
                 maxLength={500}
                 multiline
                 style={s.commentInput}
+                error={commentError || undefined}
               />
               <Button
                 title={t('rating.commentSend')}
@@ -316,6 +365,7 @@ export default function RatingDetailScreen() {
             </View>
           </View>
       </KeyboardAwareScrollView>
+      {safety.element}
     </View>
   );
 }

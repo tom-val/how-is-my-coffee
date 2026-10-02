@@ -1,8 +1,10 @@
 import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { api } from './api';
+import { api, errorMessage } from './api';
 import type { QueryKey } from './queryKeys';
+import { showToast } from './toast';
 import type { RatingDetail, RatingPage } from '@/types';
 
 /**
@@ -20,6 +22,7 @@ import type { RatingDetail, RatingPage } from '@/types';
  */
 export function useToggleLike(pageKeys: QueryKey[], detailKeys: QueryKey[] = []) {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   const mutation = useMutation({
     mutationFn: (ratingId: string) => api.toggleLike(ratingId),
@@ -31,29 +34,34 @@ export function useToggleLike(pageKeys: QueryKey[], detailKeys: QueryKey[] = [])
 
       const snapshot = allKeys.map((key) => ({ key, data: queryClient.getQueryData(key) }));
 
+      const flip = (page: RatingPage): RatingPage => {
+        // Only touch a page that actually holds this rating: `likedRatingIds` is per page, so
+        // blindly appending would mark it liked on pages it doesn't even contain.
+        if (!page.ratings.some((r) => r.ratingId === ratingId)) return page;
+        const liked = page.likedRatingIds.includes(ratingId);
+        return {
+          ...page,
+          likedRatingIds: liked
+            ? page.likedRatingIds.filter((id) => id !== ratingId)
+            : [...page.likedRatingIds, ratingId],
+          ratings: page.ratings.map((r) =>
+            r.ratingId === ratingId
+              ? { ...r, likeCount: Math.max(0, r.likeCount + (liked ? -1 : 1)) }
+              : r,
+          ),
+        };
+      };
+
       for (const key of pageKeys) {
-        queryClient.setQueryData<InfiniteData<RatingPage>>(key, (old) => {
+        // Infinite lists hold `{ pages: RatingPage[] }`; the Profile tab keeps a single `RatingPage`
+        // under the same key family. Both shapes are flipped.
+        queryClient.setQueryData<InfiniteData<RatingPage> | RatingPage>(key, (old) => {
           if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => {
-              const liked = page.likedRatingIds.includes(ratingId);
-              // Only touch a page that actually holds this rating: `likedRatingIds` is per page, so
-              // blindly appending would mark it liked on pages it doesn't even contain.
-              if (!page.ratings.some((r) => r.ratingId === ratingId)) return page;
-              return {
-                ...page,
-                likedRatingIds: liked
-                  ? page.likedRatingIds.filter((id) => id !== ratingId)
-                  : [...page.likedRatingIds, ratingId],
-                ratings: page.ratings.map((r) =>
-                  r.ratingId === ratingId
-                    ? { ...r, likeCount: Math.max(0, r.likeCount + (liked ? -1 : 1)) }
-                    : r,
-                ),
-              };
-            }),
-          };
+          if ('pages' in old && Array.isArray(old.pages)) {
+            return { ...old, pages: old.pages.map(flip) };
+          }
+          if ('ratings' in old && Array.isArray(old.ratings)) return flip(old);
+          return old;
         });
       }
 
@@ -75,10 +83,12 @@ export function useToggleLike(pageKeys: QueryKey[], detailKeys: QueryKey[] = [])
       return { snapshot };
     },
 
-    onError: (_err, _ratingId, context) => {
+    onError: (err, _ratingId, context) => {
       for (const { key, data } of context?.snapshot ?? []) {
         queryClient.setQueryData(key, data);
       }
+      // Say why the heart flipped back — offline, or 403 `blocked` (one of us blocked the other).
+      showToast(errorMessage(err, t));
     },
 
     onSettled: () => {
