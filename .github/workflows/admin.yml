@@ -2,11 +2,14 @@ name: Admin (manual)
 
 # Runs an operator command from backend/tools/Coffee.Admin against the PRODUCTION table using the
 # same OIDC deploy role as the deploy workflow — for the cases where nobody has AWS credentials on
-# a laptop. Everything here is idempotent and read-mostly; nothing deletes data.
+# a laptop. Every command is idempotent; only delete-account removes data, and only the named user's.
 #
 #   backfill-indexes   one-off after the rework: gives PLACE#…/META and USERNAME# rows written by
 #                      the old Node backend their GSI1 keys, so Discover and username search can
 #                      see them. Safe to re-run; rows that already have keys are untouched.
+#   delete-account     deletes the account named in `username` and all of its data, exactly like
+#                      in-app deletion — for people who cannot sign in and ask by e-mail (the
+#                      Support / delete-account pages promise this). Irreversible.
 
 on:
   workflow_dispatch:
@@ -16,7 +19,11 @@ on:
         required: true
         default: backfill-indexes
         type: choice
-        options: [backfill-indexes]
+        options: [backfill-indexes, delete-account]
+      username:
+        description: Username (delete-account only)
+        required: false
+        type: string
 
 permissions:
   id-token: write # OIDC → AWS
@@ -39,4 +46,14 @@ jobs:
       - name: Run ${{ inputs.command }}
         env:
           AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
-        run: dotnet run --project backend/tools/Coffee.Admin -- ${{ inputs.command }} --table CoffeeApp
+          # Same name Terraform gives the photos bucket (coffee-app-photos-<account>).
+          Photos__Bucket: coffee-app-photos-${{ vars.AWS_ACCOUNT_ID }}
+          COMMAND: ${{ inputs.command }}
+          USERNAME: ${{ inputs.username }}
+        run: |
+          if [ "$COMMAND" = "delete-account" ]; then
+            if [ -z "$USERNAME" ]; then echo "username is required for delete-account" >&2; exit 2; fi
+            dotnet run --project backend/tools/Coffee.Admin -- delete-account "$USERNAME" --table CoffeeApp
+          else
+            dotnet run --project backend/tools/Coffee.Admin -- "$COMMAND" --table CoffeeApp
+          fi

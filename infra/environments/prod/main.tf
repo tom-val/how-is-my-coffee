@@ -94,6 +94,9 @@ module "api" {
           "dynamodb:UpdateItem",
           "dynamodb:DeleteItem",
           "dynamodb:Query",
+          # Account deletion finds a user's likes/comments on other people's ratings with one
+          # filtered Scan (no index for it); without this DELETE /v1/me fails with AccessDenied.
+          "dynamodb:Scan",
           "dynamodb:BatchGetItem",
           "dynamodb:BatchWriteItem",
           "dynamodb:TransactGetItems",

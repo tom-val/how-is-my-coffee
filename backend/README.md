@@ -243,3 +243,16 @@ dotnet run --project backend/tools/Coffee.Admin -- backfill-indexes --endpoint h
 ```
 
 Or run the **Admin (manual)** GitHub workflow, which does the same with the deploy role.
+
+## Deleting an account for someone who cannot sign in
+
+The Support and delete-account pages promise deletion by e-mail. After verifying the request, run
+the **Admin (manual)** workflow with `delete-account` and the username, or locally with AWS
+credentials:
+
+```bash
+dotnet run --project backend/tools/Coffee.Admin -- delete-account <username> --bucket coffee-app-photos-<account>
+```
+
+It runs the same `AccountDeleter` as `DELETE /v1/me` (ratings, photos, reactions, companion tags,
+follows, push tokens, profile and username), without the password check.

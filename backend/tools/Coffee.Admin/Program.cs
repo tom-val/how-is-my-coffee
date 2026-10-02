@@ -2,8 +2,13 @@ using Amazon;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
 using Amazon.Runtime;
+using Amazon.S3;
+using Coffee.Api.Features.Account;
+using Coffee.Api.Features.Ratings;
 using Coffee.Api.Shared.Auth;
 using Coffee.Api.Shared.Data;
+using Coffee.Api.Shared.Storage;
+using Microsoft.Extensions.Configuration;
 
 // Operator commands against the CoffeeApp table. There is no self-service password reset (accounts
 // have no e-mail), so this is how a password gets set by hand. Two ways in:
@@ -24,6 +29,7 @@ if (args0.Count == 0)
     Console.Error.WriteLine("usage: Coffee.Admin set-password <username> <password> [--table T] [--region R] [--endpoint URL]");
     Console.Error.WriteLine("       Coffee.Admin hash-password <password>");
     Console.Error.WriteLine("       Coffee.Admin backfill-indexes [--table T] [--region R] [--endpoint URL]");
+    Console.Error.WriteLine("       Coffee.Admin delete-account <username> [--bucket B] [--table T] [--region R] [--endpoint URL]");
     return 2;
 }
 
@@ -39,6 +45,7 @@ string? Opt(string name)
 var table = Opt("--table") ?? Environment.GetEnvironmentVariable("Dynamo__TableName") ?? "CoffeeApp";
 var region = Opt("--region") ?? Environment.GetEnvironmentVariable("AWS_REGION") ?? "eu-west-1";
 var endpoint = Opt("--endpoint") ?? Environment.GetEnvironmentVariable("Dynamo__ServiceUrl");
+var bucketOpt = Opt("--bucket") ?? Environment.GetEnvironmentVariable("Photos__Bucket");
 
 switch (args0[0])
 {
@@ -154,6 +161,41 @@ switch (args0[0])
             } while (startKey is not null);
 
             Console.WriteLine($"scanned {scanned} item(s) in {table} ({region}): indexed {places} place(s) and {users} username(s) that were missing GSI1 keys.");
+            return 0;
+        }
+    case "delete-account":
+        {
+            // Operator-side account deletion for people who cannot sign in (the Support and
+            // delete-account pages promise this by e-mail). Runs exactly the same AccountDeleter as
+            // DELETE /v1/me, so the result is identical; there is no password check — the operator
+            // has verified the request. Idempotent, like the endpoint.
+            if (args0.Count != 2) return Usage("delete-account <username> [--bucket B] [--table T] [--region R] [--endpoint URL]");
+            var bucket = bucketOpt;
+            if (string.IsNullOrWhiteSpace(bucket))
+            {
+                Console.Error.WriteLine("the photos bucket is required (--bucket or Photos__Bucket) so the user's photos are deleted too");
+                return 2;
+            }
+            var username = UserDirectory.Normalize(args0[1]);
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Dynamo:TableName"] = table,
+                    ["Photos:Bucket"] = bucket,
+                })
+                .Build();
+            using var dynamo = CreateClient(region, endpoint);
+            using var s3 = new AmazonS3Client(RegionEndpoint.GetBySystemName(region));
+            var db = new CoffeeDb(dynamo, config);
+            var profile = await db.ProfileByUsernameAsync(username, CancellationToken.None);
+            if (profile is null)
+            {
+                Console.Error.WriteLine($"no user '{username}' in table {table} ({region}) — nothing to delete");
+                return 1;
+            }
+            var deleter = new AccountDeleter(db, new RatingStore(db), new S3PhotoStorage(s3, config));
+            var summary = await deleter.DeleteAsync(profile, CancellationToken.None);
+            Console.WriteLine($"deleted account '{username}': {summary}");
             return 0;
         }
     default:
