@@ -41,3 +41,6 @@ dist/
 
 # Local-only backend secrets (Google Places key etc.) — never committed
 appsettings.Local.json
+
+# Raw simulator/emulator captures; store/make_screenshots.py produces the upload sets from them
+store/screenshots/raw/
