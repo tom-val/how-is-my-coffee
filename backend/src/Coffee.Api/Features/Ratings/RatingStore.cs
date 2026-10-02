@@ -1,6 +1,7 @@
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
 using Coffee.Api.Shared.Data;
+using Coffee.Api.Shared.Moderation;
 
 namespace Coffee.Api.Features.Ratings;
 
@@ -12,6 +13,9 @@ public enum CompanionError
     Empty,
     UserNotFound,
     CannotTagSelf,
+
+    /// <summary>The companion and the author have blocked each other (either direction).</summary>
+    Blocked,
 }
 
 /// <summary>
@@ -25,11 +29,18 @@ public sealed class RatingStore(CoffeeDb db)
     public const int MaxCompanions = 10;
 
     /// <summary>
-    /// Resolves client companion input into stored companions: a <c>username</c> must exist and must
-    /// not be the author; anything else is a guest carried as a display name only.
+    /// Resolves client companion input into stored companions: a <c>username</c> must exist, must
+    /// not be the author and must not be on the other side of a block (<paramref name="blocks"/>);
+    /// anything else is a guest carried as a display name only.
+    /// <para>
+    /// <paramref name="alreadyTagged"/> (an edit's current companions) is exempt from the block
+    /// check: a block that came later must not stop the author from editing a rating that already
+    /// lists that person — it only stops new tags.
+    /// </para>
     /// </summary>
     public async Task<(List<CompanionDto> Companions, CompanionError Error, string? Detail)> ResolveCompanionsAsync(
-        IReadOnlyList<CompanionInput>? input, string authorUserId, CancellationToken ct)
+        IReadOnlyList<CompanionInput>? input, string authorUserId, CancellationToken ct,
+        BlockList? blocks = null, IReadOnlySet<string>? alreadyTagged = null)
     {
         var resolved = new List<CompanionDto>();
         if (input is null || input.Count == 0) return (resolved, CompanionError.None, null);
@@ -50,6 +61,8 @@ public sealed class RatingStore(CoffeeDb db)
             var userId = await db.UserIdByUsernameAsync(username, ct);
             if (userId is null) return ([], CompanionError.UserNotFound, username);
             if (userId == authorUserId) return ([], CompanionError.CannotTagSelf, username);
+            if (blocks is not null && blocks.Hides(userId) && alreadyTagged?.Contains(userId) != true)
+                return ([], CompanionError.Blocked, username);
 
             var (storedUsername, storedDisplayName) = await db.IdentityAsync(userId, ct);
             resolved.Add(new CompanionDto(
@@ -308,6 +321,28 @@ public sealed class RatingStore(CoffeeDb db)
                 // Missing copy or counter already 0: leave it.
             }
         }
+    }
+
+    /// <summary>
+    /// One comment row by id. Its sort key embeds the creation time, which the caller does not know,
+    /// so this is a query on the rating's partition filtered on <c>commentId</c> (bounded: one rating).
+    /// </summary>
+    public async Task<Dictionary<string, AttributeValue>?> FindCommentAsync(
+        string ratingId, string commentId, CancellationToken ct)
+    {
+        var rows = await db.QueryAllAsync(new QueryRequest
+        {
+            TableName = db.TableName,
+            KeyConditionExpression = "PK = :pk AND begins_with(SK, :sk)",
+            FilterExpression = "commentId = :cid",
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                [":pk"] = Av.S(Keys.Rating(ratingId)),
+                [":sk"] = Av.S(Keys.CommentPrefix),
+                [":cid"] = Av.S(commentId),
+            },
+        }, ct);
+        return rows.FirstOrDefault();
     }
 
     /// <summary>

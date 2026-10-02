@@ -16,12 +16,13 @@ src/Coffee.Api/
   Features/<Feature>/         one Map<Feature>Endpoints extension + its DTO records per feature
   Shared/Auth/                JWT issuing + validation, PBKDF2 hashing, legacy scrypt verification
   Shared/Push/                Expo push sender + the notifier that decides who gets what
+  Shared/Moderation/          content filter (word list) + the per-request block list
   Shared/Data/                DynamoDB wrapper, key/attribute constants, cursors, timestamps
   Shared/Caffeine/            static lookup table + the OpenAI fallback
   Shared/Storage/             presigned S3/MinIO uploads and public photo URLs
   Shared/Serialization/       the source-generated JSON context (see "Native AOT" below)
 tools/Coffee.Seed/            creates the table + bucket and loads demo data
-tests/Coffee.Api.Tests/       unit tests (hashing, JWT, caffeine table, cursors, health, Expo push, deleted-user tokens)
+tests/Coffee.Api.Tests/       unit tests (hashing, JWT, caffeine table, cursors, health, Expo push, deleted-user tokens, content filter)
 tests/Coffee.Api.IntegrationTests/  full HTTP flows against DynamoDB Local + MinIO
 ```
 
@@ -98,6 +99,7 @@ Read through `IConfiguration`, so Lambda environment variables use `__` for the 
 | `Google:PlacesApiKey` | *(unset)* | Place search proxy; unset logs a warning and `/v1/places/suggest` answers `503 place_search_unavailable` |
 | `Push:Enabled` | `true` | Set to `false` to make the notifier a no-op — no Expo call, no extra DynamoDB reads. The test hosts use this |
 | `Push:AccessToken` | *(unset)* | Expo access token; sent as `Authorization: Bearer …` only when set (needed only for Expo accounts with enhanced security) |
+| `Moderation:NotifyUsernames` | *(empty)* | Comma-separated usernames that get a push for every new report; empty = reports are only logged. Prod: Terraform `moderation_notify_usernames` (default `tomas`); Development: `tomas` |
 | `Cors:AllowedOrigins` | `[]` | Allowed origins in production; Development allows any origin |
 
 `appsettings.Development.json` holds the local values, including a throwaway JWT secret.
@@ -188,8 +190,11 @@ account. `Features/Account/AccountDeleter.cs` then removes, in this order:
    decrements are one transaction, guarded so a counter never drops below 0;
 3. their entry in other people's `companions` (all three copies), then their `TAGGED#` rows;
 4. `FRIEND#`/`FOLLOWER#` rows and the mirror rows on the other users' partitions;
-5. `PUSH#` tokens, then a sweep of anything else left on `USER#<id>`;
-6. the `USERNAME#` lookup (conditional on it still pointing at this user) and the `PROFILE` row, last.
+5. `BLOCK#`/`BLOCKEDBY#` rows and their mirrors on the other users' partitions, then the reports the
+   user filed (`REPORTED#` pointers + a GSI1 query of the report queue filtered on
+   `reporterUserId`) — reports filed *against* the user stay as moderation history;
+6. `PUSH#` tokens, then a sweep of anything else left on `USER#<id>`;
+7. the `USERNAME#` lookup (conditional on it still pointing at this user) and the `PROFILE` row, last.
 
 Every step re-reads what is left, so a call that dies half-way can simply be repeated with the same
 token and password — the profile is still there until the very end. After that, old tokens are
@@ -207,11 +212,14 @@ names are in `Shared/Data/Keys.cs`. Two additions:
   are a query rather than a scan.
 - `PUSH#<expoPushToken>` rows on a user's partition, one per registered device (see "Push
   notifications" above).
+- `BLOCK#<blockedId>` / `BLOCKEDBY#<blockerId>` rows on a user's partition, `REPORTED#<type>#<id>`
+  pointers on the reporter's partition and `REPORT#<id>/META` items (see "Moderation" below).
 - `GSI1`, which carries two partitions:
   - `GSI1PK="USERNAME"`, `GSI1SK=<username>` on the `USERNAME#` rows — the username prefix search.
   - `GSI1PK="PLACE"`, `GSI1SK=<placeId>` on the `PLACE#<id>/META` rows — the map / discovery query
     behind `GET /v1/places`, which reads that one small partition and filters the viewport in memory
     instead of scanning the table.
+  - `GSI1PK="REPORT"`, `GSI1SK=<createdAt>` on the `REPORT#<id>/META` rows — the moderation queue.
 
 Rows written by the old backend have no `GSI1PK`/`GSI1SK`, and both partitions backfill themselves
 rather than needing a migration job: login backfills the `USERNAME#` row (`if_not_exists`, so it is
@@ -256,3 +264,55 @@ dotnet run --project backend/tools/Coffee.Admin -- delete-account <username> --b
 
 It runs the same `AccountDeleter` as `DELETE /v1/me` (ratings, photos, reactions, companion tags,
 follows, push tokens, profile and username), without the password check.
+
+## Moderation
+
+What App Store guideline 1.2 and Google Play's UGC policy ask of an app with user content: a way to
+report it, a way to block people, a filter, and someone acting on reports. The contract section
+"Safety: reports, blocks, content filter" is the reference; this is how the backend does it.
+
+**Content filter** — `Shared/Moderation/ContentFilter.cs`. A short static list of English and
+Lithuanian slurs and explicit sexual / abusive terms (plus a few phrases such as "fuck you", "eik
+nachui"), matched as whole words after lower-casing and folding diacritics, so "KURVĄ" hits while
+"Scunthorpe", "cocktail" or "pizza" do not. Applied to sign-up (username, display name), ratings
+(drink name, notes, guest companion names — create and edit) and comments; a hit is
+`400 objectionable_content`. Deliberately narrow: plain profanity passes, reports catch the rest.
+
+**Blocks** — `Features/Blocks`. `POST /v1/blocks` writes `USER#<me>/BLOCK#<them>` and the mirror
+`USER#<them>/BLOCKEDBY#<me>` and deletes the follows between the two in both directions, all in one
+transaction. `Shared/Moderation/BlockList` loads everyone hidden from the caller with **one** query
+(`begins_with(SK, "BLOCK")` covers both row types) and only on the paths that need it:
+
+- reads — feed, place ratings, rating detail (the rating itself 404s; likes and comments by the other
+  side are hidden and the counters adjusted to match), "coffees with me", user search (also the
+  companion picker), Discover friend counts, and a signed-in caller's view of the other user's profile
+  and lists (`404 user_not_found`). Anonymous reads of `/v1/users/{username}` and its ratings are
+  untouched (no query at all);
+- writes — follow, like (taking a like back stays allowed), comment, and tagging as a companion on
+  create/edit answer `403 blocked`. Companions already on a rating before the block do not stop the
+  author from editing it; the block list is not even read when a rating has no registered companions.
+
+**Reports** — `Features/Reports`. `POST /v1/reports` stores `REPORT#<id>/META` (`status: "open"`, an
+excerpt of at most 200 characters: the comment text, "drink: notes" for a rating, the display name
+for a user) on GSI1 under `"REPORT"` by `createdAt`, plus a pointer `USER#<reporter>/REPORTED#<type>#<id>`
+→ reportId. The pointer makes a repeat report of an *open* one idempotent (`200` with the same id);
+after a moderator resolves it, reporting again opens a new report. Every new report is logged and
+pushed to each account in `Moderation:NotifyUsernames` ("New report: rating" / "spam · @user:
+excerpt", tap → the rating or the profile). That push ignores notification preferences, uses the same
+3 s budget as the others and only ever logs a failure.
+
+**Acting on reports** — `tools/Coffee.Admin`, built on `Features/Reports/ModerationService.cs`, which
+reuses the API's own teardown code. Every command is idempotent.
+
+```bash
+A="dotnet run --project backend/tools/Coffee.Admin --"
+$A list-reports [--status open|all] [--limit N]   # newest first (default open, 50); prints the follow-up commands
+$A remove-rating <ratingId> --bucket coffee-app-photos-<account>   # RatingStore.DeleteRatingAsync + the photo
+$A remove-comment <ratingId> <commentId>          # RatingStore.RemoveReactionAsync: row + commentCount ×3
+$A resolve-report <reportId>                      # status → resolved (resolvedAt kept on a repeat)
+$A delete-account <username> --bucket coffee-app-photos-<account>  # the whole account, like DELETE /v1/me
+```
+
+Add `--endpoint http://localhost:8000` (and `Photos__ServiceUrl=http://localhost:9000` for
+`remove-rating`) to run them against the local stack. The **Admin (manual)** GitHub workflow runs the
+same commands against production with the deploy role.

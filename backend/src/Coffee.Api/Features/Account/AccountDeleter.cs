@@ -1,13 +1,15 @@
 using Amazon.DynamoDBv2.Model;
 using Coffee.Api.Features.Ratings;
 using Coffee.Api.Shared.Data;
+using Coffee.Api.Shared.Moderation;
 using Coffee.Api.Shared.Storage;
 
 namespace Coffee.Api.Features.Account;
 
 /// <summary>What one deletion run removed — logged, never serialized.</summary>
 public sealed record AccountDeletionSummary(
-    int Ratings, int Photos, int Reactions, int Tags, int Follows, int Followers, int OtherRows);
+    int Ratings, int Photos, int Reactions, int Tags, int Follows, int Followers, int OtherRows,
+    int Blocks, int Reports);
 
 /// <summary>
 /// Removes a user and everything tied to them (see "Account deletion" in the contract).
@@ -34,6 +36,8 @@ public sealed class AccountDeleter(CoffeeDb db, RatingStore ratings, IPhotoStora
         var reactions = await DeleteReactionsOnOthersAsync(userId, ct);
         var tags = await LeaveCompanionListsAsync(userId, ct);
         var (follows, followers) = await DeleteSocialGraphAsync(userId, ct);
+        var blocks = await DeleteBlocksAsync(userId, ct);
+        var reports = await DeleteOwnReportsAsync(userId, ct);
         await DeletePrefixAsync(userId, Keys.PushPrefix, ct);
 
         // Sweep: whatever is still on the partition apart from the profile (USER#…/PLACE# visits the
@@ -49,7 +53,8 @@ public sealed class AccountDeleter(CoffeeDb db, RatingStore ratings, IPhotoStora
         // Last: from here on the token resolves to no profile and every endpoint answers 401.
         await db.DeleteAsync(Keys.User(userId), Keys.ProfileSk, ct);
 
-        return new AccountDeletionSummary(ratingCount, photoCount, reactions, tags, follows, followers, leftovers.Count);
+        return new AccountDeletionSummary(
+            ratingCount, photoCount, reactions, tags, follows, followers, leftovers.Count, blocks, reports);
     }
 
     /// <summary>
@@ -169,6 +174,64 @@ public sealed class AccountDeleter(CoffeeDb db, RatingStore ratings, IPhotoStora
         }
 
         return (follows.Count, followers.Count);
+    }
+
+    /// <summary>
+    /// Blocks in both directions: for each <c>BLOCK#x</c> the mirror <c>USER#x/BLOCKEDBY#me</c>, for each
+    /// <c>BLOCKEDBY#x</c> the mirror <c>USER#x/BLOCK#me</c> — then our own row. Mirror first, so a retry
+    /// still knows which partitions to visit.
+    /// </summary>
+    private async Task<int> DeleteBlocksAsync(string userId, CancellationToken ct)
+    {
+        var rows = await db.QueryPrefixAsync(Keys.User(userId), Keys.BlockFamilyPrefix, ct);
+        foreach (var row in rows)
+        {
+            var sk = row.StrOr(Attr.Sk, string.Empty);
+            if (BlockList.OtherUserId(sk) is { } other)
+            {
+                var mirror = sk.StartsWith(Keys.BlockedByPrefix, StringComparison.Ordinal)
+                    ? Keys.BlockSk(userId)
+                    : Keys.BlockedBySk(userId);
+                await db.DeleteAsync(Keys.User(other), mirror, ct);
+            }
+            await db.DeleteAsync(Keys.User(userId), sk, ct);
+        }
+        return rows.Count;
+    }
+
+    /// <summary>
+    /// The reports this user filed (reports filed <i>against</i> them stay — moderation history).
+    /// Found two ways and unioned: the <c>REPORTED#</c> pointers on their partition (strongly
+    /// consistent, but a pointer only names the latest report per target) and a GSI1 query of the
+    /// report queue filtered on <c>reporterUserId</c> (catches older, resolved reports; eventually
+    /// consistent). The queue is small, so the filtered query is cheap. Pointers go last.
+    /// </summary>
+    private async Task<int> DeleteOwnReportsAsync(string userId, CancellationToken ct)
+    {
+        var pointers = await db.QueryPrefixAsync(Keys.User(userId), Keys.ReportedPrefix, ct);
+        var filed = await db.QueryAllAsync(new QueryRequest
+        {
+            TableName = db.TableName,
+            IndexName = "GSI1",
+            KeyConditionExpression = "GSI1PK = :pk",
+            FilterExpression = "reporterUserId = :uid",
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                [":pk"] = Av.S(Keys.ReportIndexPk),
+                [":uid"] = Av.S(userId),
+            },
+            ProjectionExpression = "reportId",
+        }, ct);
+
+        var reportIds = pointers.Concat(filed)
+            .Select(r => r.StrOr(Attr.ReportId, string.Empty))
+            .Where(id => id.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        await db.BatchDeleteAsync([.. reportIds.Select(id => CoffeeDb.Key(Keys.Report(id), Keys.MetaSk))], ct);
+        await db.BatchDeleteAsync([.. pointers.Select(KeyOf)], ct);
+        return reportIds.Count;
     }
 
     private async Task DeletePrefixAsync(string userId, string prefix, CancellationToken ct)

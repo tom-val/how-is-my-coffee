@@ -5,6 +5,7 @@ using Amazon.Runtime;
 using Amazon.S3;
 using Coffee.Api.Features.Account;
 using Coffee.Api.Features.Ratings;
+using Coffee.Api.Features.Reports;
 using Coffee.Api.Shared.Auth;
 using Coffee.Api.Shared.Data;
 using Coffee.Api.Shared.Storage;
@@ -22,6 +23,16 @@ using Microsoft.Extensions.Configuration;
 //       somewhere without .NET, e.g. CloudShell.
 //
 // Both use the API's own PasswordHasher, so the result is exactly what /v1/auth/login verifies.
+//
+// Moderation (App Store 1.2) — reports filed with POST /v1/reports land in a queue on GSI1:
+//
+//   list-reports [--status open|all] [--limit N]     newest first (default: open, 50)
+//   resolve-report <reportId>                         status → resolved
+//   remove-rating <ratingId> [--bucket B]             same teardown as the author's delete, plus the photo
+//   remove-comment <ratingId> <commentId>             comment row + commentCount on all three copies
+//   delete-account <username> [--bucket B]            the whole account, like DELETE /v1/me
+//
+// All idempotent. `Photos__ServiceUrl` (env) points the S3 client at MinIO for local runs.
 
 var args0 = args.ToList();
 if (args0.Count == 0)
@@ -30,6 +41,10 @@ if (args0.Count == 0)
     Console.Error.WriteLine("       Coffee.Admin hash-password <password>");
     Console.Error.WriteLine("       Coffee.Admin backfill-indexes [--table T] [--region R] [--endpoint URL]");
     Console.Error.WriteLine("       Coffee.Admin delete-account <username> [--bucket B] [--table T] [--region R] [--endpoint URL]");
+    Console.Error.WriteLine("       Coffee.Admin list-reports [--status open|all] [--limit N] [--table T] [--region R] [--endpoint URL]");
+    Console.Error.WriteLine("       Coffee.Admin resolve-report <reportId> [--table T] [--region R] [--endpoint URL]");
+    Console.Error.WriteLine("       Coffee.Admin remove-rating <ratingId> [--bucket B] [--table T] [--region R] [--endpoint URL]");
+    Console.Error.WriteLine("       Coffee.Admin remove-comment <ratingId> <commentId> [--table T] [--region R] [--endpoint URL]");
     return 2;
 }
 
@@ -46,6 +61,9 @@ var table = Opt("--table") ?? Environment.GetEnvironmentVariable("Dynamo__TableN
 var region = Opt("--region") ?? Environment.GetEnvironmentVariable("AWS_REGION") ?? "eu-west-1";
 var endpoint = Opt("--endpoint") ?? Environment.GetEnvironmentVariable("Dynamo__ServiceUrl");
 var bucketOpt = Opt("--bucket") ?? Environment.GetEnvironmentVariable("Photos__Bucket");
+var statusOpt = Opt("--status") ?? "open";
+var limitOpt = Opt("--limit");
+var s3Endpoint = Environment.GetEnvironmentVariable("Photos__ServiceUrl");
 
 switch (args0[0])
 {
@@ -177,15 +195,9 @@ switch (args0[0])
                 return 2;
             }
             var username = UserDirectory.Normalize(args0[1]);
-            var config = new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["Dynamo:TableName"] = table,
-                    ["Photos:Bucket"] = bucket,
-                })
-                .Build();
+            var config = Config(table, bucket);
             using var dynamo = CreateClient(region, endpoint);
-            using var s3 = new AmazonS3Client(RegionEndpoint.GetBySystemName(region));
+            using var s3 = CreateS3Client(region, s3Endpoint);
             var db = new CoffeeDb(dynamo, config);
             var profile = await db.ProfileByUsernameAsync(username, CancellationToken.None);
             if (profile is null)
@@ -198,8 +210,123 @@ switch (args0[0])
             Console.WriteLine($"deleted account '{username}': {summary}");
             return 0;
         }
+    case "list-reports":
+        {
+            if (args0.Count != 1) return Usage("list-reports [--status open|all] [--limit N]");
+            if (statusOpt is not ("open" or "all")) return Usage("--status must be open or all");
+            var limit = 50;
+            if (limitOpt is not null && (!int.TryParse(limitOpt, out limit) || limit < 1))
+                return Usage("--limit must be a positive number");
+
+            using var dynamo = CreateClient(region, endpoint);
+            var moderation = Moderation(dynamo, table, photos: null);
+            var reports = await moderation.ListReportsAsync(statusOpt == "open", limit, CancellationToken.None);
+            if (reports.Count == 0)
+            {
+                Console.WriteLine($"no {(statusOpt == "open" ? "open " : string.Empty)}reports in {table} ({region}).");
+                return 0;
+            }
+
+            Console.WriteLine($"{"CREATED (UTC)",-17} {"STATUS",-8} {"TYPE",-7} {"REASON",-10} {"TARGET",-22} {"REPORTER",-20} REPORT ID");
+            foreach (var r in reports)
+            {
+                var created = r.CreatedAt.Length >= 16 ? r.CreatedAt[..16].Replace('T', ' ') : r.CreatedAt;
+                Console.WriteLine(
+                    $"{created,-17} {r.Status,-8} {r.TargetType,-7} {r.Reason,-10} {Clip("@" + r.TargetUsername, 22),-22} "
+                    + $"{Clip("@" + r.ReporterUsername, 20),-20} {r.ReportId}");
+                Console.WriteLine($"    \"{Clip(r.Excerpt, 100)}\"");
+                if (!string.IsNullOrWhiteSpace(r.Details)) Console.WriteLine($"    details: {Clip(r.Details!, 100)}");
+                var action = r.TargetType switch
+                {
+                    "rating" => $"remove-rating {r.TargetId}",
+                    "comment" => $"remove-comment {r.RatingId} {r.TargetId}",
+                    _ => $"delete-account {r.TargetUsername}",
+                };
+                Console.WriteLine($"    → {action}   |   resolve-report {r.ReportId}");
+            }
+            Console.WriteLine($"{reports.Count} report(s).");
+            return 0;
+        }
+    case "resolve-report":
+        {
+            if (args0.Count != 2) return Usage("resolve-report <reportId>");
+            using var dynamo = CreateClient(region, endpoint);
+            var outcome = await Moderation(dynamo, table, photos: null)
+                .ResolveReportAsync(args0[1], CancellationToken.None);
+            switch (outcome)
+            {
+                case ResolveOutcome.NotFound:
+                    Console.Error.WriteLine($"no report '{args0[1]}' in table {table} ({region})");
+                    return 1;
+                case ResolveOutcome.AlreadyResolved:
+                    Console.WriteLine($"report {args0[1]} was already resolved.");
+                    return 0;
+                default:
+                    Console.WriteLine($"report {args0[1]} resolved.");
+                    return 0;
+            }
+        }
+    case "remove-rating":
+        {
+            if (args0.Count != 2) return Usage("remove-rating <ratingId> [--bucket B] [--table T] [--region R] [--endpoint URL]");
+            if (string.IsNullOrWhiteSpace(bucketOpt))
+            {
+                Console.Error.WriteLine("the photos bucket is required (--bucket or Photos__Bucket) so the rating's photo is deleted too");
+                return 2;
+            }
+            using var dynamo = CreateClient(region, endpoint);
+            using var s3 = CreateS3Client(region, s3Endpoint);
+            var config = Config(table, bucketOpt);
+            var (removed, photoDeleted) = await Moderation(dynamo, table, new S3PhotoStorage(s3, config))
+                .RemoveRatingAsync(args0[1], CancellationToken.None);
+            Console.WriteLine(removed
+                ? $"removed rating {args0[1]}{(photoDeleted ? " and its photo" : string.Empty)}."
+                : $"rating {args0[1]} does not exist (already removed?) — nothing to do.");
+            return 0;
+        }
+    case "remove-comment":
+        {
+            if (args0.Count != 3) return Usage("remove-comment <ratingId> <commentId> [--table T] [--region R] [--endpoint URL]");
+            using var dynamo = CreateClient(region, endpoint);
+            var removed = await Moderation(dynamo, table, photos: null)
+                .RemoveCommentAsync(args0[1], args0[2], CancellationToken.None);
+            Console.WriteLine(removed
+                ? $"removed comment {args0[2]} from rating {args0[1]}."
+                : $"comment {args0[2]} not found on rating {args0[1]} (already removed?) — nothing to do.");
+            return 0;
+        }
     default:
         return Usage($"unknown command '{args0[0]}'");
+}
+
+static IConfiguration Config(string table, string? bucket) => new ConfigurationBuilder()
+    .AddInMemoryCollection(new Dictionary<string, string?>
+    {
+        ["Dynamo:TableName"] = table,
+        ["Photos:Bucket"] = bucket,
+    })
+    .Build();
+
+static ModerationService Moderation(AmazonDynamoDBClient dynamo, string table, IPhotoStorage? photos)
+{
+    var db = new CoffeeDb(dynamo, Config(table, bucket: null));
+    return new ModerationService(db, new RatingStore(db), photos);
+}
+
+static string Clip(string text, int max)
+{
+    var oneLine = text.Replace('\n', ' ').Replace('\r', ' ');
+    return oneLine.Length <= max ? oneLine : oneLine[..(max - 1)] + "…";
+}
+
+static AmazonS3Client CreateS3Client(string region, string? serviceUrl)
+{
+    if (string.IsNullOrWhiteSpace(serviceUrl)) return new AmazonS3Client(RegionEndpoint.GetBySystemName(region));
+    // MinIO locally: path-style, its own credentials.
+    return new AmazonS3Client(
+        Environment.GetEnvironmentVariable("Photos__AccessKey") ?? "minioadmin",
+        Environment.GetEnvironmentVariable("Photos__SecretKey") ?? "minioadmin",
+        new AmazonS3Config { ServiceURL = serviceUrl, ForcePathStyle = true, AuthenticationRegion = region });
 }
 
 static int Usage(string message)

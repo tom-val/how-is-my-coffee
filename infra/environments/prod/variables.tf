@@ -26,6 +26,13 @@ variable "google_places_api_key" {
   default     = ""
 }
 
+# App Store 1.2: every new report (POST /v1/reports) is pushed to these accounts' devices.
+variable "moderation_notify_usernames" {
+  description = "Comma-separated usernames that receive a push for every new content report (empty = log only)"
+  type        = string
+  default     = "tomas"
+}
+
 # Optional custom domain for the web app (e.g. coffee.valiunas.dev). Empty ⇒ *.cloudfront.net only.
 # In CI it comes from the GitHub variable APP_CUSTOM_DOMAIN.
 variable "custom_domain" {

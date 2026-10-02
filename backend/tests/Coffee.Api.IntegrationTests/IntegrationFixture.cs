@@ -27,6 +27,9 @@ public sealed class IntegrationFixture : WebApplicationFactory<Program>, IAsyncL
     public const string S3Url = "http://localhost:9000";
     public const string Bucket = "coffee-app-photos";
 
+    /// <summary>The account <c>Moderation:NotifyUsernames</c> names on <see cref="PushHost"/>.</summary>
+    public const string ModeratorUsername = "kavute_moderator";
+
     public string TableName { get; } = $"CoffeeAppTest{Guid.NewGuid():N}";
     public string? SkipReason { get; private set; }
 
@@ -144,6 +147,7 @@ public sealed class IntegrationFixture : WebApplicationFactory<Program>, IAsyncL
     public WebApplicationFactory<Program> PushHost => _pushHost ??= WithWebHostBuilder(builder =>
     {
         builder.UseSetting("Push:Enabled", "true");
+        builder.UseSetting("Moderation:NotifyUsernames", $" {ModeratorUsername} , no_such_moderator");
         builder.ConfigureTestServices(services => services.AddSingleton<IPushSender>(PushSender));
     });
 

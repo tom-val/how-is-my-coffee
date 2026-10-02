@@ -3,6 +3,7 @@ using Amazon.DynamoDBv2.Model;
 using Coffee.Api.Features.Users;
 using Coffee.Api.Shared.Auth;
 using Coffee.Api.Shared.Data;
+using Coffee.Api.Shared.Moderation;
 using Coffee.Api.Shared.Serialization;
 
 namespace Coffee.Api.Features.Auth;
@@ -37,6 +38,8 @@ public static partial class AuthEndpoints
                 return ApiResults.BadRequest("displayName must be 1-50 characters");
             if (password.Length is < 6 or > 100)
                 return ApiResults.BadRequest("password must be 6-100 characters");
+            if (ContentFilter.IsObjectionable(username, displayName))
+                return ApiResults.BadRequest(ContentFilter.ErrorCode);
 
             var normalized = UserDirectory.Normalize(username);
             var userId = Guid.NewGuid().ToString("D");

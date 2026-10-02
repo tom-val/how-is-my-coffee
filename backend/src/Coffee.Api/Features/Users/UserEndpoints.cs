@@ -2,6 +2,7 @@ using Amazon.DynamoDBv2.Model;
 using Coffee.Api.Features.Ratings;
 using Coffee.Api.Shared.Auth;
 using Coffee.Api.Shared.Data;
+using Coffee.Api.Shared.Moderation;
 using Coffee.Api.Shared.Serialization;
 using Coffee.Api.Shared.Storage;
 
@@ -30,12 +31,13 @@ public static class UserEndpoints
         app.MapGet("/v1/users/search", async (
             string? q, AuthContext auth, CoffeeDb db, CancellationToken ct) =>
         {
-            if (!auth.TryRequireUser(out _, out var failure)) return failure;
+            if (!auth.TryRequireUser(out var callerId, out var failure)) return failure;
 
             var prefix = UserDirectory.Normalize(q ?? string.Empty);
             if (prefix.Length < 2)
                 return Results.Json(new UserListDto([]), ApiJsonSerializerContext.Default.UserListDto);
 
+            var blocksTask = BlockList.LoadAsync(db, callerId, ct);
             var matches = await db.QueryPageAsync(new QueryRequest
             {
                 TableName = db.TableName,
@@ -49,9 +51,11 @@ public static class UserEndpoints
                 Limit = 10,
             }, ct);
 
+            // Nobody on the other side of a block shows up (this also feeds the companion picker).
+            var blocks = await blocksTask;
             var userIds = matches.Items
                 .Select(i => i.Str(Attr.UserId))
-                .Where(id => !string.IsNullOrEmpty(id))
+                .Where(id => !string.IsNullOrEmpty(id) && !blocks.Hides(id))
                 .Distinct()
                 .ToList();
             if (userIds.Count == 0)
@@ -68,11 +72,15 @@ public static class UserEndpoints
             return Results.Json(new UserListDto(users), ApiJsonSerializerContext.Default.UserListDto);
         });
 
-        // Public profile — the one screen an unauthenticated visitor can open (/u/<username>).
-        app.MapGet("/v1/users/{username}", async (string username, CoffeeDb db, CancellationToken ct) =>
+        // Public profile — the one screen an unauthenticated visitor can open (/u/<username>). A
+        // signed-in caller on either side of a block gets the same 404 as for a missing user.
+        app.MapGet("/v1/users/{username}", async (
+            string username, AuthContext auth, CoffeeDb db, CancellationToken ct) =>
         {
+            var blocksTask = BlockList.LoadAsync(db, auth.UserId, ct);
             var profile = await db.ProfileByUsernameAsync(username, ct);
-            return profile is null
+            var blocks = await blocksTask;
+            return profile is null || blocks.Hides(profile.Str(Attr.UserId))
                 ? ApiResults.NotFound("user_not_found")
                 : Results.Json(UserMapper.ToDto(profile), ApiJsonSerializerContext.Default.UserDto);
         });
@@ -82,8 +90,10 @@ public static class UserEndpoints
             string username, int? limit, string? cursor,
             AuthContext auth, CoffeeDb db, IPhotoStorage photos, CancellationToken ct) =>
         {
+            var blocksTask = BlockList.LoadAsync(db, auth.UserId, ct);
             var profile = await db.ProfileByUsernameAsync(username, ct);
-            if (profile is null) return ApiResults.NotFound("user_not_found");
+            if (profile is null || (await blocksTask).Hides(profile.Str(Attr.UserId)))
+                return ApiResults.NotFound("user_not_found");
 
             var userId = profile.StrOr(Attr.UserId, string.Empty);
             var page = await db.QueryPageAsync(new QueryRequest
@@ -116,10 +126,11 @@ public static class UserEndpoints
         app.MapGet("/v1/users/{username}/places", async (
             string username, AuthContext auth, CoffeeDb db, CancellationToken ct) =>
         {
-            if (!auth.TryRequireUser(out _, out var failure)) return failure;
+            if (!auth.TryRequireUser(out var callerId, out var failure)) return failure;
 
+            var blocksTask = BlockList.LoadAsync(db, callerId, ct);
             var userId = await db.UserIdByUsernameAsync(username, ct);
-            if (userId is null) return ApiResults.NotFound("user_not_found");
+            if (userId is null || (await blocksTask).Hides(userId)) return ApiResults.NotFound("user_not_found");
 
             var items = await db.QueryPrefixAsync(Keys.User(userId), Keys.PlacePrefix, ct);
             var places = items.Select(item => new UserPlaceDto(
@@ -137,10 +148,12 @@ public static class UserEndpoints
         app.MapGet("/v1/users/{username}/caffeine", async (
             string username, AuthContext auth, CoffeeDb db, CancellationToken ct) =>
         {
-            if (!auth.TryRequireUser(out _, out var failure)) return failure;
+            if (!auth.TryRequireUser(out var callerId, out var failure)) return failure;
 
+            var blocksTask = BlockList.LoadAsync(db, callerId, ct);
             var profile = await db.ProfileByUsernameAsync(username, ct);
-            if (profile is null) return ApiResults.NotFound("user_not_found");
+            if (profile is null || (await blocksTask).Hides(profile.Str(Attr.UserId)))
+                return ApiResults.NotFound("user_not_found");
 
             var userId = profile.StrOr(Attr.UserId, string.Empty);
             // Sort keys embed the ISO timestamp, so "today" is a plain range scan — no filter needed.
@@ -169,10 +182,12 @@ public static class UserEndpoints
             string username, int? limit, string? cursor,
             AuthContext auth, CoffeeDb db, IPhotoStorage photos, CancellationToken ct) =>
         {
-            if (!auth.TryRequireUser(out _, out var failure)) return failure;
+            if (!auth.TryRequireUser(out var callerId, out var failure)) return failure;
 
+            var blocksTask = BlockList.LoadAsync(db, callerId, ct);
             var userId = await db.UserIdByUsernameAsync(username, ct);
-            if (userId is null) return ApiResults.NotFound("user_not_found");
+            var blocks = await blocksTask;
+            if (userId is null || blocks.Hides(userId)) return ApiResults.NotFound("user_not_found");
 
             var page = await db.QueryPageAsync(new QueryRequest
             {
@@ -199,7 +214,12 @@ public static class UserEndpoints
 
             // BatchGet does not preserve order; restore the newest-first order of the TAGGED# rows.
             var byId = metas.ToDictionary(m => m.StrOr(Attr.RatingId, string.Empty));
-            var ordered = ratingIds.Where(byId.ContainsKey).Select(id => byId[id]).ToList();
+            // …and drop ratings whose author is on the other side of a block from the caller.
+            var ordered = ratingIds
+                .Where(byId.ContainsKey)
+                .Select(id => byId[id])
+                .Where(m => !blocks.Hides(m.Str(Attr.UserId)))
+                .ToList();
 
             var ratings = await RatingMapper.HydrateAsync(db, photos, ordered, ct);
             var liked = await RatingMapper.LikedRatingIdsAsync(db, [.. ratings.Select(r => r.RatingId)], auth.UserId, ct);

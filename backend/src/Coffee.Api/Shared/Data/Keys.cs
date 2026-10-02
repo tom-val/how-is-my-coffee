@@ -20,6 +20,19 @@ public static class Keys
     public const string CommentPrefix = "COMMENT#";
     public const string PushPrefix = "PUSH#";
 
+    /// <summary>
+    /// <c>BLOCK#&lt;blockedId&gt;</c> (I blocked them) and <c>BLOCKEDBY#&lt;blockerId&gt;</c> (they blocked
+    /// me) both start with <see cref="BlockFamilyPrefix"/>, so one query on my partition returns every
+    /// user hidden from me in either direction — see <c>Shared/Moderation/BlockList</c>.
+    /// </summary>
+    public const string BlockPrefix = "BLOCK#";
+    public const string BlockedByPrefix = "BLOCKEDBY#";
+    public const string BlockFamilyPrefix = "BLOCK";
+
+    /// <summary>Reporter-side idempotency pointer: <c>REPORTED#&lt;targetType&gt;#&lt;targetId&gt;</c> → reportId.</summary>
+    public const string ReportedPrefix = "REPORTED#";
+    public const string ReportPrefix = "REPORT#";
+
     /// <summary>GSI1 partition constant for the username prefix search (see <c>GET /v1/users/search</c>).</summary>
     public const string UsernameIndexPk = "USERNAME";
 
@@ -30,10 +43,15 @@ public static class Keys
     /// </summary>
     public const string PlaceIndexPk = "PLACE";
 
+    /// <summary>GSI1 partition constant for the moderation queue: every <c>REPORT#&lt;id&gt;/META</c> row
+    /// carries it with <c>GSI1SK = &lt;createdAt&gt;</c>, so "newest reports first" is one query.</summary>
+    public const string ReportIndexPk = "REPORT";
+
     public static string User(string userId) => $"USER#{userId}";
     public static string Rating(string ratingId) => $"RATING#{ratingId}";
     public static string Place(string placeId) => $"PLACE#{placeId}";
     public static string UsernameLookup(string username) => $"USERNAME#{username}";
+    public static string Report(string reportId) => $"REPORT#{reportId}";
 
     /// <summary>Sort key of a rating copy on both the USER# and PLACE# partitions.</summary>
     public static string RatingSk(string createdAt, string ratingId) => $"RATING#{createdAt}#{ratingId}";
@@ -46,6 +64,10 @@ public static class Keys
 
     /// <summary>One row per registered device; the Expo token is the sort key, so re-registering is an upsert.</summary>
     public static string PushSk(string token) => $"PUSH#{token}";
+
+    public static string BlockSk(string blockedUserId) => $"BLOCK#{blockedUserId}";
+    public static string BlockedBySk(string blockerUserId) => $"BLOCKEDBY#{blockerUserId}";
+    public static string ReportedSk(string targetType, string targetId) => $"REPORTED#{targetType}#{targetId}";
 }
 
 /// <summary>Attribute names as written by the old Node handlers — do not rename.</summary>
@@ -103,4 +125,19 @@ public static class Attr
     public const string AuthorUserId = "authorUserId";
     public const string CommentId = "commentId";
     public const string Text = "text";
+
+    public const string BlockedAt = "blockedAt";
+
+    public const string ReportId = "reportId";
+    public const string ReporterUserId = "reporterUserId";
+    public const string ReporterUsername = "reporterUsername";
+    public const string TargetType = "targetType";
+    public const string TargetId = "targetId";
+    public const string TargetUserId = "targetUserId";
+    public const string TargetUsername = "targetUsername";
+    public const string Reason = "reason";
+    public const string Details = "details";
+    public const string Excerpt = "excerpt";
+    public const string Status = "status";
+    public const string ResolvedAt = "resolvedAt";
 }

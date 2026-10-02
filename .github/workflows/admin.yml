@@ -2,14 +2,20 @@ name: Admin (manual)
 
 # Runs an operator command from backend/tools/Coffee.Admin against the PRODUCTION table using the
 # same OIDC deploy role as the deploy workflow — for the cases where nobody has AWS credentials on
-# a laptop. Every command is idempotent; only delete-account removes data, and only the named user's.
+# a laptop. Every command is idempotent (re-running a remove/resolve prints "already …" and exits 0).
 #
-#   backfill-indexes   one-off after the rework: gives PLACE#…/META and USERNAME# rows written by
-#                      the old Node backend their GSI1 keys, so Discover and username search can
-#                      see them. Safe to re-run; rows that already have keys are untouched.
+#   list-reports       moderation queue, newest first (`status`: open | all, `limit`). Moderators
+#                      also get a push for every new report (Moderation__NotifyUsernames).
+#   resolve-report     marks `report_id` resolved once it has been dealt with.
+#   remove-rating      deletes `rating_id` (all copies, its photo, likes and comments).
+#   remove-comment     deletes `comment_id` on `rating_id` and fixes the comment count.
 #   delete-account     deletes the account named in `username` and all of its data, exactly like
-#                      in-app deletion — for people who cannot sign in and ask by e-mail (the
-#                      Support / delete-account pages promise this). Irreversible.
+#                      in-app deletion — for abusive users, and for people who cannot sign in and ask
+#                      by e-mail (the Support / delete-account pages promise this). Irreversible.
+#   backfill-indexes   one-off after the rework: gives PLACE#…/META and USERNAME# rows written by
+#                      the old Node backend their GSI1 keys, so Discover and username search see them.
+#
+# Apple 1.2 / Google Play: reports must be acted on within 24 hours (the Terms promise it).
 
 on:
   workflow_dispatch:
@@ -17,11 +23,34 @@ on:
       command:
         description: Admin command to run
         required: true
-        default: backfill-indexes
+        default: list-reports
         type: choice
-        options: [backfill-indexes, delete-account]
+        options: [list-reports, resolve-report, remove-rating, remove-comment, delete-account, backfill-indexes]
+      status:
+        description: list-reports — which reports
+        required: false
+        default: open
+        type: choice
+        options: [open, all]
+      limit:
+        description: list-reports — how many
+        required: false
+        default: "50"
+        type: string
+      report_id:
+        description: resolve-report — report id
+        required: false
+        type: string
+      rating_id:
+        description: remove-rating / remove-comment — rating id
+        required: false
+        type: string
+      comment_id:
+        description: remove-comment — comment id
+        required: false
+        type: string
       username:
-        description: Username (delete-account only)
+        description: delete-account — username
         required: false
         type: string
 
@@ -49,11 +78,24 @@ jobs:
           # Same name Terraform gives the photos bucket (coffee-app-photos-<account>).
           Photos__Bucket: coffee-app-photos-${{ vars.AWS_ACCOUNT_ID }}
           COMMAND: ${{ inputs.command }}
+          STATUS: ${{ inputs.status }}
+          LIMIT: ${{ inputs.limit }}
+          REPORT_ID: ${{ inputs.report_id }}
+          RATING_ID: ${{ inputs.rating_id }}
+          COMMENT_ID: ${{ inputs.comment_id }}
           USERNAME: ${{ inputs.username }}
         run: |
-          if [ "$COMMAND" = "delete-account" ]; then
-            if [ -z "$USERNAME" ]; then echo "username is required for delete-account" >&2; exit 2; fi
-            dotnet run --project backend/tools/Coffee.Admin -- delete-account "$USERNAME" --table CoffeeApp
-          else
-            dotnet run --project backend/tools/Coffee.Admin -- "$COMMAND" --table CoffeeApp
-          fi
+          admin() { dotnet run --project backend/tools/Coffee.Admin -- "$@" --table CoffeeApp; }
+          need() { if [ -z "$2" ]; then echo "$1 is required for $COMMAND" >&2; exit 2; fi; }
+          case "$COMMAND" in
+            list-reports)
+              if [ -n "$LIMIT" ]; then admin list-reports --status "$STATUS" --limit "$LIMIT"
+              else admin list-reports --status "$STATUS"; fi ;;
+            resolve-report) need report_id "$REPORT_ID"; admin resolve-report "$REPORT_ID" ;;
+            remove-rating)  need rating_id "$RATING_ID"; admin remove-rating "$RATING_ID" ;;
+            remove-comment) need rating_id "$RATING_ID"; need comment_id "$COMMENT_ID"
+                            admin remove-comment "$RATING_ID" "$COMMENT_ID" ;;
+            delete-account) need username "$USERNAME"; admin delete-account "$USERNAME" ;;
+            backfill-indexes) admin backfill-indexes ;;
+            *) echo "unknown command $COMMAND" >&2; exit 2 ;;
+          esac

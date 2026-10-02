@@ -1,6 +1,8 @@
 using Amazon.DynamoDBv2.Model;
 using Coffee.Api.Shared.Auth;
+using Coffee.Api.Features.Blocks;
 using Coffee.Api.Shared.Data;
+using Coffee.Api.Shared.Moderation;
 using Coffee.Api.Shared.Push;
 using Coffee.Api.Shared.Serialization;
 
@@ -62,6 +64,8 @@ public static class FriendEndpoints
             var friendUserId = await db.UserIdByUsernameAsync(normalized, ct);
             if (friendUserId is null) return ApiResults.NotFound("user_not_found");
             if (friendUserId == userId) return ApiResults.BadRequest("cannot_add_self");
+            if ((await BlockList.LoadAsync(db, userId, ct)).Hides(friendUserId))
+                return ApiResults.Forbidden(BlockEndpoints.BlockedError);
 
             // Whether this is a new follow decides whether they get a push; the rows themselves are
             // rewritten either way, so re-adding stays idempotent.

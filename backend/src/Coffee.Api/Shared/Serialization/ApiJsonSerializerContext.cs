@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Amazon.Lambda.APIGatewayEvents;
 using Coffee.Api.Features.Account;
 using Coffee.Api.Features.Auth;
+using Coffee.Api.Features.Blocks;
 using Coffee.Api.Features.Caffeine;
 using Coffee.Api.Features.Friends;
 using Coffee.Api.Features.Health;
@@ -9,6 +10,7 @@ using Coffee.Api.Features.Photos;
 using Coffee.Api.Features.Places;
 using Coffee.Api.Features.Push;
 using Coffee.Api.Features.Ratings;
+using Coffee.Api.Features.Reports;
 using Coffee.Api.Features.Users;
 using Coffee.Api.Shared.Auth;
 using Coffee.Api.Shared.Caffeine;
@@ -58,6 +60,12 @@ namespace Coffee.Api.Shared.Serialization;
 [JsonSerializable(typeof(FollowerDto))]
 [JsonSerializable(typeof(FriendListDto))]
 [JsonSerializable(typeof(FollowerListDto))]
+// Safety: blocks and reports.
+[JsonSerializable(typeof(BlockBody))]
+[JsonSerializable(typeof(BlockDto))]
+[JsonSerializable(typeof(BlockListDto))]
+[JsonSerializable(typeof(ReportBody))]
+[JsonSerializable(typeof(ReportCreatedDto))]
 // Ratings.
 [JsonSerializable(typeof(CompanionDto))]
 [JsonSerializable(typeof(CompanionInput))]

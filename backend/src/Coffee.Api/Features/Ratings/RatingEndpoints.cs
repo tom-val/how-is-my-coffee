@@ -2,7 +2,9 @@ using System.Text.Json;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
 using Coffee.Api.Shared.Auth;
+using Coffee.Api.Features.Blocks;
 using Coffee.Api.Shared.Data;
+using Coffee.Api.Shared.Moderation;
 using Coffee.Api.Shared.Push;
 using Coffee.Api.Shared.Serialization;
 using Coffee.Api.Shared.Storage;
@@ -46,8 +48,11 @@ public static class RatingEndpoints
         if (body.Description is { Length: > 500 }) return ApiResults.BadRequest("description must be at most 500 characters");
         if (body.Address is { Length: > 300 }) return ApiResults.BadRequest("address must be at most 300 characters");
         if (caffeineMg is < 0 or > 1000) return ApiResults.BadRequest("caffeineMg must be between 0 and 1000");
+        if (ContentFilter.IsObjectionable(drinkName, body.Description) || HasObjectionableCompanion(body.Companions))
+            return ApiResults.BadRequest(ContentFilter.ErrorCode);
 
-        var (companions, companionError, detail) = await store.ResolveCompanionsAsync(body.Companions, userId, ct);
+        var blocks = await CompanionBlocksAsync(db, userId, body.Companions, ct);
+        var (companions, companionError, detail) = await store.ResolveCompanionsAsync(body.Companions, userId, ct, blocks);
         if (companionError is not CompanionError.None) return CompanionFailure(companionError, detail);
 
         var (username, displayName) = await db.IdentityAsync(userId, ct);
@@ -131,8 +136,15 @@ public static class RatingEndpoints
     {
         if (!auth.TryRequireUser(out var userId, out var failure)) return failure;
 
-        // META, likes and comments all live under RATING#<id>, so the whole detail view is one query.
-        var items = await db.QueryPartitionAsync(Keys.Rating(ratingId), ct);
+        // META, likes and comments all live under RATING#<id>, so the whole detail view is one query
+        // (plus the caller's block list, read alongside it).
+        var itemsTask = db.QueryPartitionAsync(Keys.Rating(ratingId), ct);
+        var blocksTask = BlockList.LoadAsync(db, userId, ct);
+        await Task.WhenAll(itemsTask, blocksTask);
+        var items = itemsTask.Result;
+        var blocks = blocksTask.Result;
+        var hiddenLikes = 0;
+        var hiddenComments = 0;
 
         Dictionary<string, AttributeValue>? meta = null;
         var likes = new List<LikeDto>();
@@ -147,6 +159,11 @@ public static class RatingEndpoints
             }
             else if (sk.StartsWith(Keys.LikePrefix, StringComparison.Ordinal))
             {
+                if (blocks.Hides(item.Str(Attr.UserId)))
+                {
+                    hiddenLikes++;
+                    continue;
+                }
                 likes.Add(new LikeDto(
                     item.StrOr(Attr.UserId, string.Empty),
                     item.StrOr(Attr.Username, string.Empty),
@@ -154,6 +171,11 @@ public static class RatingEndpoints
             }
             else if (sk.StartsWith(Keys.CommentPrefix, StringComparison.Ordinal))
             {
+                if (blocks.Hides(item.Str(Attr.UserId)))
+                {
+                    hiddenComments++;
+                    continue;
+                }
                 comments.Add(new CommentDto(
                     item.StrOr(Attr.CommentId, string.Empty),
                     item.StrOr(Attr.UserId, string.Empty),
@@ -164,11 +186,18 @@ public static class RatingEndpoints
             }
         }
 
-        if (meta is null) return ApiResults.NotFound("rating_not_found");
+        // A rating by someone on the other side of a block does not exist for this caller.
+        if (meta is null || blocks.Hides(meta.Str(Attr.UserId))) return ApiResults.NotFound("rating_not_found");
 
         var hydrated = await RatingMapper.HydrateAsync(db, photos, [meta], ct);
+        // The counters include the hidden reactions; take them off so the numbers match the lists.
+        var rating = hydrated[0] with
+        {
+            LikeCount = Math.Max(0, hydrated[0].LikeCount - hiddenLikes),
+            CommentCount = Math.Max(0, hydrated[0].CommentCount - hiddenComments),
+        };
         return Results.Json(
-            new RatingDetail(hydrated[0], likes, comments, likes.Any(l => l.UserId == userId)),
+            new RatingDetail(rating, likes, comments, likes.Any(l => l.UserId == userId)),
             ApiJsonSerializerContext.Default.RatingDetail);
     }
 
@@ -190,6 +219,11 @@ public static class RatingEndpoints
         }
 
         if (patch.Validate() is { } validationError) return ApiResults.BadRequest(validationError);
+        if (ContentFilter.IsObjectionable(patch.HasDrinkName ? patch.DrinkName : null, patch.HasDescription ? patch.Description : null)
+            || (patch.HasCompanions && HasObjectionableCompanion(patch.Companions)))
+        {
+            return ApiResults.BadRequest(ContentFilter.ErrorCode);
+        }
 
         var meta = await db.GetAsync(Keys.Rating(ratingId), Keys.MetaSk, ct);
         if (meta is null) return ApiResults.NotFound("rating_not_found");
@@ -207,7 +241,13 @@ public static class RatingEndpoints
         List<CompanionDto>? companions = null;
         if (patch.HasCompanions)
         {
-            var (resolved, error, detail) = await store.ResolveCompanionsAsync(patch.Companions, userId, ct);
+            var blocks = await CompanionBlocksAsync(db, userId, patch.Companions, ct);
+            var current = oldCompanions
+                .Where(c => c.UserId is not null)
+                .Select(c => c.UserId!)
+                .ToHashSet(StringComparer.Ordinal);
+            var (resolved, error, detail) = await store.ResolveCompanionsAsync(
+                patch.Companions, userId, ct, blocks, current);
             if (error is not CompanionError.None) return CompanionFailure(error, detail);
             companions = resolved;
         }
@@ -308,6 +348,10 @@ public static class RatingEndpoints
                 ApiJsonSerializerContext.Default.LikeToggleDto);
         }
 
+        // Taking a like back is always allowed; a new one across a block is not.
+        if ((await BlockList.LoadAsync(db, userId, ct)).Hides(ownerUserId))
+            return ApiResults.Forbidden(BlockEndpoints.BlockedError);
+
         var (username, displayName) = await db.IdentityAsync(userId, ct);
         await db.PutAsync(new Dictionary<string, AttributeValue>
         {
@@ -338,9 +382,14 @@ public static class RatingEndpoints
 
         var text = (body.Text ?? string.Empty).Trim();
         if (text.Length is < 1 or > 500) return ApiResults.BadRequest("text must be 1-500 characters");
+        if (ContentFilter.IsObjectionable(text)) return ApiResults.BadRequest(ContentFilter.ErrorCode);
 
-        var meta = await db.GetAsync(Keys.Rating(ratingId), Keys.MetaSk, ct);
+        var metaTask = db.GetAsync(Keys.Rating(ratingId), Keys.MetaSk, ct);
+        var blocksTask = BlockList.LoadAsync(db, userId, ct);
+        await Task.WhenAll(metaTask, blocksTask);
+        var meta = metaTask.Result;
         if (meta is null) return ApiResults.NotFound("rating_not_found");
+        if (blocksTask.Result.Hides(meta.Str(Attr.UserId))) return ApiResults.Forbidden(BlockEndpoints.BlockedError);
 
         var (username, displayName) = await db.IdentityAsync(userId, ct);
         var commentId = Guid.NewGuid().ToString("D");
@@ -374,6 +423,18 @@ public static class RatingEndpoints
             statusCode: StatusCodes.Status201Created);
     }
 
+    /// <summary>Guest names (and display-name overrides) are free text that others see.</summary>
+    private static bool HasObjectionableCompanion(IReadOnlyList<CompanionInput>? companions) =>
+        companions is not null && companions.Any(c => ContentFilter.IsObjectionable(c.DisplayName));
+
+    /// <summary>The caller's block list — read only when some companion is a registered user, so a
+    /// rating without tags costs no extra query.</summary>
+    private static Task<BlockList> CompanionBlocksAsync(
+        CoffeeDb db, string userId, IReadOnlyList<CompanionInput>? companions, CancellationToken ct) =>
+        companions is not null && companions.Any(c => !string.IsNullOrWhiteSpace(c.Username))
+            ? BlockList.LoadAsync(db, userId, ct)
+            : Task.FromResult(BlockList.Empty);
+
     /// <summary>Companion ids worth notifying — guests have no account and no device.</summary>
     private static List<string> RegisteredCompanionIds(IReadOnlyList<CompanionDto> companions) =>
         [.. companions.Where(c => c.UserId is not null).Select(c => c.UserId!)];
@@ -394,6 +455,7 @@ public static class RatingEndpoints
         CompanionError.Empty => ApiResults.BadRequest("each companion needs a username or a displayName"),
         CompanionError.CannotTagSelf => ApiResults.BadRequest("cannot_tag_self"),
         CompanionError.UserNotFound => ApiResults.NotFound("user_not_found"),
+        CompanionError.Blocked => ApiResults.Forbidden(BlockEndpoints.BlockedError),
         _ => ApiResults.BadRequest(detail ?? "invalid companions"),
     };
 }

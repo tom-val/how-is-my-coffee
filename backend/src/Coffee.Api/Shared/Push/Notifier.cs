@@ -9,6 +9,10 @@ public sealed record NotificationActor(string UserId, string Username, string Di
 /// <summary>The rating a notification points at, reduced to what the copy and the deep link need.</summary>
 public sealed record NotificationRating(string RatingId, string DrinkName, string PlaceName, double Stars);
 
+/// <summary>A freshly filed report, reduced to what the moderator push needs.</summary>
+public sealed record ModerationReport(
+    string ReportId, string TargetType, string Reason, string TargetUsername, string Excerpt, string? RatingId);
+
 /// <summary>
 /// Turns "this just happened" into Expo messages: it resolves each recipient's preference and
 /// devices, writes the English copy from the contract, hands the batch to <see cref="IPushSender"/>
@@ -33,6 +37,13 @@ public sealed class Notifier(CoffeeDb db, IPushSender sender, IConfiguration con
     // Parsed by hand rather than through IConfiguration.GetValue<T>: the binder is reflection-based,
     // and "default to on unless someone explicitly said false" is a one-liner anyway.
     private readonly bool _enabled = !bool.TryParse(config["Push:Enabled"], out var configured) || configured;
+
+    /// <summary><c>Moderation:NotifyUsernames</c> — comma-separated; empty means reports are only logged.</summary>
+    private readonly string[] _moderators = (config["Moderation:NotifyUsernames"] ?? string.Empty)
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Select(UserDirectory.Normalize)
+        .Distinct(StringComparer.Ordinal)
+        .ToArray();
 
     /// <summary>"&lt;Name&gt; had a coffee with you" to each registered companion of a new (or newly edited) rating.</summary>
     public Task TaggedAsync(
@@ -79,6 +90,43 @@ public sealed class Notifier(CoffeeDb db, IPushSender sender, IConfiguration con
             ratingId: rating.RatingId, username: null, ct);
 
     /// <summary>
+    /// "New report: &lt;targetType&gt;" to every moderator in <c>Moderation:NotifyUsernames</c>. Not a
+    /// user-facing notification type: no preference can switch it off, and the reporter is not
+    /// excluded (a moderator testing the flow should see it arrive). The tap target is the rating for
+    /// rating/comment reports and the profile for user reports.
+    /// </summary>
+    public async Task ReportAsync(ModerationReport report, CancellationToken ct)
+    {
+        if (!_enabled || _moderators.Length == 0) return;
+
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budget.CancelAfter(Budget);
+        try
+        {
+            var ids = await Task.WhenAll(_moderators.Select(u => db.UserIdByUsernameAsync(u, budget.Token)));
+            var recipients = ids.Where(id => !string.IsNullOrEmpty(id)).Select(id => id!).ToList();
+            if (recipients.Count == 0)
+            {
+                logger.LogWarning("Moderation:NotifyUsernames resolves to no existing account; report {ReportId} not pushed",
+                    report.ReportId);
+                return;
+            }
+
+            await DispatchAsync(
+                ModerationType, prefsType: null, recipients, excludeUserId: null,
+                title: $"New report: {report.TargetType}",
+                body: Truncate($"{report.Reason} · @{report.TargetUsername}: {report.Excerpt}", 240),
+                ratingId: report.RatingId,
+                username: report.RatingId is null ? report.TargetUsername : null,
+                budget.Token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning("Moderator push for report {ReportId} failed: {Reason}", report.ReportId, ex.GetType().Name);
+        }
+    }
+
+    /// <summary>
     /// Everyone following <paramref name="userId"/> — the recipient list for <c>friendRating</c>.
     /// Lives here rather than in the endpoint so that a failure (or a disabled <c>Push:Enabled</c>)
     /// costs the caller nothing: it answers with an empty list instead of throwing.
@@ -104,8 +152,25 @@ public sealed class Notifier(CoffeeDb db, IPushSender sender, IConfiguration con
     /// Prefs → devices → Expo → token cleanup, for one message sent to many people. The whole thing
     /// is best-effort: any failure (including the budget running out) is a warning and nothing more.
     /// </summary>
-    private async Task DispatchAsync(
+    private Task DispatchAsync(
         NotificationType type,
+        IReadOnlyList<string> recipientUserIds,
+        string? excludeUserId,
+        string title,
+        string? body,
+        string? ratingId,
+        string? username,
+        CancellationToken ct) =>
+        DispatchAsync(type.Key(), type, recipientUserIds, excludeUserId, title, body, ratingId, username, ct);
+
+    /// <summary><c>data.type</c> of the moderator push (not a preference key).</summary>
+    public const string ModerationType = "report";
+
+    /// <param name="typeKey">The <c>data.type</c> sent to the device.</param>
+    /// <param name="prefsType">The preference that can switch this off; null = always delivered.</param>
+    private async Task DispatchAsync(
+        string typeKey,
+        NotificationType? prefsType,
         IReadOnlyList<string> recipientUserIds,
         string? excludeUserId,
         string title,
@@ -129,13 +194,16 @@ public sealed class Notifier(CoffeeDb db, IPushSender sender, IConfiguration con
         {
             var owners = new Dictionary<string, string>(StringComparer.Ordinal);
             var messages = new List<ExpoPushMessage>();
-            var data = new ExpoPushData(type.Key(), ratingId, username);
+            var data = new ExpoPushData(typeKey, ratingId, username);
 
             foreach (var userId in recipients)
             {
-                var profile = await db.GetAsync(
-                    Keys.User(userId), Keys.ProfileSk, budget.Token, Attr.UserId, Attr.NotificationPrefs);
-                if (!NotificationPrefs.Allows(profile, type)) continue;
+                if (prefsType is { } pref)
+                {
+                    var profile = await db.GetAsync(
+                        Keys.User(userId), Keys.ProfileSk, budget.Token, Attr.UserId, Attr.NotificationPrefs);
+                    if (!NotificationPrefs.Allows(profile, pref)) continue;
+                }
 
                 var devices = await db.QueryPrefixAsync(Keys.User(userId), Keys.PushPrefix, budget.Token);
                 foreach (var device in devices)
@@ -160,7 +228,7 @@ public sealed class Notifier(CoffeeDb db, IPushSender sender, IConfiguration con
         catch (Exception ex)
         {
             // Deliberately catch-all: a rating must not fail because a phone could not be reached.
-            logger.LogWarning("Push notification '{Type}' failed: {Reason}", type.Key(), ex.GetType().Name);
+            logger.LogWarning("Push notification '{Type}' failed: {Reason}", typeKey, ex.GetType().Name);
         }
     }
 

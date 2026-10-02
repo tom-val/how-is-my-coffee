@@ -81,6 +81,8 @@ module "api" {
     Photos__PublicBaseUrl = local.web_cf_origin
     OpenAi__ApiKey        = var.openai_api_key
     Google__PlacesApiKey  = var.google_places_api_key
+    # Who gets the "New report" push (comma-separated usernames; empty = reports are only logged).
+    Moderation__NotifyUsernames = var.moderation_notify_usernames
   }, local.api_cors_env)
 
   extra_policy_json = jsonencode({

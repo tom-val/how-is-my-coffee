@@ -234,6 +234,46 @@ public class AccountDeletionTests(IntegrationFixture fixture) : IntegrationTestB
         Assert.True(await PhotoExistsAsync(foreignKey));
     }
 
+    [SkippableFact]
+    public async Task Deleting_an_account_removes_its_blocks_on_both_sides_and_the_reports_it_filed()
+    {
+        RequireInfrastructure();
+        var leaver = await RegisterAsync("blkleave");
+        var blockedByLeaver = await RegisterAsync("blkvictim");
+        var blockerOfLeaver = await RegisterAsync("blkblocker");
+        var place = $"place_{Guid.NewGuid():N}";
+        var leaverRating = await CreateRatingAsync(leaver, place, "Cafe", 3, "Latte");
+        var otherRating = await CreateRatingAsync(blockedByLeaver, place, "Cafe", 3, "Mocha");
+
+        Assert.Equal(HttpStatusCode.Created, (await Client(leaver.Token).PostAsync("/v1/blocks",
+            Body($$"""{"username":"{{blockedByLeaver.Username}}"}"""))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await Client(blockerOfLeaver.Token).PostAsync("/v1/blocks",
+            Body($$"""{"username":"{{leaver.Username}}"}"""))).StatusCode);
+
+        // The leaver files two reports; somebody else reports the leaver.
+        var filedRating = await ReportIdAsync(leaver, $$"""{"targetType":"rating","targetId":"{{otherRating}}","reason":"spam"}""");
+        var filedUser = await ReportIdAsync(leaver, $$"""{"targetType":"user","targetId":"{{blockerOfLeaver.UserId}}","reason":"other"}""");
+        var against = await ReportIdAsync(blockerOfLeaver, $$"""{"targetType":"rating","targetId":"{{leaverRating}}","reason":"offensive"}""");
+
+        Assert.Equal(HttpStatusCode.OK, (await DeleteAccountAsync(leaver.Token, "coffee123")).StatusCode);
+
+        Assert.Empty(await RowsAsync(leaver.UserId));
+        Assert.Null(await GetRowAsync($"USER#{blockedByLeaver.UserId}", $"BLOCKEDBY#{leaver.UserId}"));
+        Assert.Null(await GetRowAsync($"USER#{blockerOfLeaver.UserId}", $"BLOCK#{leaver.UserId}"));
+        Assert.Empty((await ReadJsonAsync(await Client(blockerOfLeaver.Token).GetAsync("/v1/blocks"))).GetProperty("blocks").EnumerateArray());
+        Assert.Null(await GetRowAsync($"REPORT#{filedRating}", "META"));
+        Assert.Null(await GetRowAsync($"REPORT#{filedUser}", "META"));
+        // Reports about the leaver are moderation history and stay.
+        Assert.NotNull(await GetRowAsync($"REPORT#{against}", "META"));
+    }
+
+    private async Task<string> ReportIdAsync(TestUser who, string body)
+    {
+        var response = await Client(who.Token).PostAsync("/v1/reports", Body(body));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return (await ReadJsonAsync(response)).GetProperty("reportId").GetString()!;
+    }
+
     private Task<HttpResponseMessage> DeleteAccountAsync(string? token, string password) =>
         Client(token).SendAsync(new HttpRequestMessage(HttpMethod.Delete, "/v1/me")
         {

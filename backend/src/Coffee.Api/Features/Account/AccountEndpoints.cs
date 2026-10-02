@@ -36,9 +36,10 @@ public static class AccountEndpoints
 
             loggers.CreateLogger(typeof(AccountEndpoints)).LogInformation(
                 "Deleted account {UserId}: {Ratings} ratings, {Photos} photos, {Reactions} likes/comments, "
-                + "{Tags} tags, {Follows} follows, {Followers} followers, {OtherRows} other rows",
+                + "{Tags} tags, {Follows} follows, {Followers} followers, {Blocks} blocks, {Reports} reports, "
+                + "{OtherRows} other rows",
                 userId, summary.Ratings, summary.Photos, summary.Reactions, summary.Tags,
-                summary.Follows, summary.Followers, summary.OtherRows);
+                summary.Follows, summary.Followers, summary.Blocks, summary.Reports, summary.OtherRows);
 
             return ApiResults.Deleted();
         });

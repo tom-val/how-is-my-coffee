@@ -2,6 +2,7 @@ using Amazon.DynamoDBv2.Model;
 using Coffee.Api.Features.Ratings;
 using Coffee.Api.Shared.Auth;
 using Coffee.Api.Shared.Data;
+using Coffee.Api.Shared.Moderation;
 using Coffee.Api.Shared.Serialization;
 using Coffee.Api.Shared.Storage;
 
@@ -32,7 +33,9 @@ public static class FeedEndpoints
 
             var friendsTask = db.QueryPrefixAsync(Keys.User(userId), Keys.FriendPrefix, ct);
             var profileTask = db.ProfileAsync(userId, ct);
-            await Task.WhenAll(friendsTask, profileTask);
+            var blocksTask = BlockList.LoadAsync(db, userId, ct);
+            await Task.WhenAll(friendsTask, profileTask, blocksTask);
+            var blocks = blocksTask.Result;
 
             var authors = new Dictionary<string, (string Username, string DisplayName)>();
             var sources = new List<string> { userId };
@@ -79,8 +82,11 @@ public static class FeedEndpoints
             }
 
             // A rating can arrive from several sources at once (my own rating that also tagged me).
+            // Ratings by anyone on the other side of a block are dropped before paging, so a page is
+            // still full when there is more to show.
             var merged = items
                 .Where(i => i.Str(Attr.RatingId) is not null)
+                .Where(i => !blocks.Hides(i.Str(Attr.UserId)))
                 .GroupBy(i => i.StrOr(Attr.RatingId, string.Empty))
                 .Select(g => g.First())
                 .OrderByDescending(i => i.StrOr(Attr.CreatedAt, string.Empty), StringComparer.Ordinal)

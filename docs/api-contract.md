@@ -86,6 +86,17 @@ so the web app and native apps can use the CloudFront origin as the API base.
     blocking user → 404 `user_not_found` for the other side.
 - Account deletion also removes BLOCK#/BLOCKEDBY# rows on both sides and the user's own reports.
 
+**Edge cases (as implemented)**
+- Taking back a like is allowed across a block; only a NEW like gets 403 `blocked`. Editing a rating that already lists a since-blocked
+  companion still works — the block only refuses NEW tags.
+- `POST /v1/reports` also answers 400 `invalid_target_type`, `invalid_reason`, a missing `targetId`/`ratingId` (comments), or `details` > 500.
+  Re-reporting after a report was resolved opens a new one (201); only an OPEN report is answered idempotently (200, same id).
+- A rating hidden by a block answers 404 `rating_not_found`; on a third person's rating the hidden side's likes/comments are removed and the
+  counts reduced to match. A signed-in caller on either side gets 404 `user_not_found` for the other's profile and its sub-resources.
+- Place-ratings pages may come back short (blocked authors are filtered after paging) while still carrying `nextCursor`; the feed filters
+  before paging.
+- Moderator push `data`: `{ type: "report", ratingId? (rating/comment), username? (user) }` — the app's normal tap routing opens it.
+
 **Content filter**
 - Free text that others see (display name, username, drink name, notes, comment text, guest companion names) is checked against a small
   word list of slurs/explicit abuse (en + lt, `Shared/Moderation/ContentFilter.cs`, whole-word, case/diacritic-insensitive). A hit → 400

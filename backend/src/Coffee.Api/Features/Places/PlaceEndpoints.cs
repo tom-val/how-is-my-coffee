@@ -3,6 +3,7 @@ using Amazon.DynamoDBv2.Model;
 using Coffee.Api.Features.Ratings;
 using Coffee.Api.Shared.Auth;
 using Coffee.Api.Shared.Data;
+using Coffee.Api.Shared.Moderation;
 using Coffee.Api.Shared.Places;
 using Coffee.Api.Shared.Serialization;
 using Coffee.Api.Shared.Storage;
@@ -161,8 +162,9 @@ public static partial class PlaceEndpoints
             string placeId, int? limit, string? cursor,
             AuthContext auth, CoffeeDb db, IPhotoStorage photos, CancellationToken ct) =>
         {
-            if (!auth.TryRequireUser(out _, out var failure)) return failure;
+            if (!auth.TryRequireUser(out var userId, out var failure)) return failure;
 
+            var blocksTask = BlockList.LoadAsync(db, userId, ct);
             var page = await db.QueryPageAsync(new QueryRequest
             {
                 TableName = db.TableName,
@@ -185,7 +187,11 @@ public static partial class PlaceEndpoints
                 : new PlaceFallback(placeId, meta.StrOr(Attr.Name, string.Empty),
                     meta.Num(Attr.Lat), meta.Num(Attr.Lng), meta.Str(Attr.Address));
 
-            var ratings = await RatingMapper.HydrateAsync(db, photos, page.Items, ct, place: fallback);
+            // Hidden authors are filtered out of the page; the cursor still comes from the raw page, so
+            // a short page (even an empty one with a cursor) is possible and the client keeps paging.
+            var blocks = await blocksTask;
+            var visible = page.Items.Where(i => !blocks.Hides(i.Str(Attr.UserId))).ToList();
+            var ratings = await RatingMapper.HydrateAsync(db, photos, visible, ct, place: fallback);
             var liked = await RatingMapper.LikedRatingIdsAsync(db, [.. ratings.Select(r => r.RatingId)], auth.UserId, ct);
 
             return Results.Json(
@@ -271,10 +277,15 @@ public static partial class PlaceEndpoints
     private static async Task<Dictionary<string, int>> FriendVisitCountsAsync(
         CoffeeDb db, string userId, CancellationToken ct)
     {
-        var friendRows = await db.QueryPrefixAsync(Keys.User(userId), Keys.FriendPrefix, ct);
-        var friendIds = friendRows
+        // A block already removed the follows between the two, so this normally filters nothing; it
+        // covers a follow that raced the block.
+        var friendRowsTask = db.QueryPrefixAsync(Keys.User(userId), Keys.FriendPrefix, ct);
+        var blocksTask = BlockList.LoadAsync(db, userId, ct);
+        await Task.WhenAll(friendRowsTask, blocksTask);
+        var blocks = blocksTask.Result;
+        var friendIds = friendRowsTask.Result
             .Select(f => f.StrOr(Attr.FriendUserId, string.Empty))
-            .Where(id => id.Length > 0 && id != userId)
+            .Where(id => id.Length > 0 && id != userId && !blocks.Hides(id))
             .Distinct()
             .ToList();
 
