@@ -10,6 +10,8 @@ together.
 | Listing texts (both stores, en-GB + lt) | `listing.py` → generated copy-paste sheet `LISTING.md` (run `python3 store/listing.py`; it checks every limit) |
 | Screenshots, App Store 6.9" (1320×2868) | `screenshots/app-store-6.9/{en,lt}/` — 5 each |
 | Screenshots, Google Play phone (1200×2400) | `screenshots/google-play-phone/{en,lt}/` — 4 each |
+| Screenshots, Google Play 7" tablet (1080×1920) | `screenshots/google-play-tablet-7/{en,lt}/` — 4 each |
+| Screenshots, Google Play 10" tablet (1440×2560) | `screenshots/google-play-tablet-10/{en,lt}/` — 4 each |
 | Google Play icon 512×512 + feature graphic 1024×500 | `graphics/` (regenerate: `python3 store/make_graphics.py`) |
 | Demo data used for the screenshots | `seed_screenshot_data.py` (local API only; invented people and cafés) |
 
@@ -76,7 +78,9 @@ Contact on all pages: `tomas@valiunas.dev`.
 
 - **App name / Short / Full description / Release notes:** `LISTING.md` (en-GB default + lt-LT).
 - **Graphics:** `graphics/play-icon-512.png`, `graphics/play-feature-1024x500.png`,
-  phone screenshots `screenshots/google-play-phone/`.
+  screenshots: phone `screenshots/google-play-phone/`, 7-inch tablet `screenshots/google-play-tablet-7/`,
+  10-inch tablet `screenshots/google-play-tablet-10/` (all 9:16 or 1:2, each per language). The
+  tablet shots are real tablet-sized emulator captures: the app keeps its phone-width column there.
 - **Category:** Food & Drink. **Contact email:** tomas@valiunas.dev. **Website:** coffee.valiunas.dev.
 - **App content tasks:**
 

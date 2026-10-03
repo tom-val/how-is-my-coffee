@@ -5,6 +5,10 @@
   Google Play phone: the emulator's 1080×2400 is 2.22:1 and Play caps the long side at 2× the short
   one, so the frame is widened to 1200×2400 with the page's own background colour at the sides
   (cropping would cut either the header or the tab bar).
+  Google Play 7" / 10" tablet: captured on the same emulator with `adb shell wm size` + `wm density`
+  set to a 9:16 tablet screen (1080×1920 @ 280 dpi ≈ 620 dp wide, 1440×2560 @ 280 dpi ≈ 820 dp),
+  so they are already the required 9:16 and are only re-encoded. The app keeps its phone-width
+  column on tablets; the screenshots show that honestly.
 
 Run: python3 store/make_screenshots.py
 """
@@ -30,13 +34,26 @@ def android(src: pathlib.Path, dst: pathlib.Path):
     out.paste(im, (pad, 0))
     out.save(dst, optimize=True)
 
+def as_is(src: pathlib.Path, dst: pathlib.Path):
+    im = Image.open(src).convert("RGB")
+    assert im.width * 16 == im.height * 9, f"{src.name} is not 9:16"
+    im.save(dst, optimize=True)
+
+TARGETS = {  # raw file prefix -> (output folder, converter)
+    "ios": ("app-store-6.9", ios),
+    "android": ("google-play-phone", android),
+    "tablet7": ("google-play-tablet-7", as_is),
+    "tablet10": ("google-play-tablet-10", as_is),
+}
+
 made = []
 for src in sorted(RAW.glob("*.png")):
     platform, lang, rest = src.stem.split("-", 2)
-    folder = ROOT / ("app-store-6.9" if platform == "ios" else "google-play-phone") / lang
+    name, convert = TARGETS[platform]
+    folder = ROOT / name / lang
     folder.mkdir(parents=True, exist_ok=True)
     dst = folder / f"{rest}.png"
-    (ios if platform == "ios" else android)(src, dst)
+    convert(src, dst)
     made.append(dst)
 
 for p in made:
