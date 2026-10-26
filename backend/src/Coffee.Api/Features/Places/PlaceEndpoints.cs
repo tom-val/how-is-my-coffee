@@ -24,6 +24,8 @@ public sealed record MapPlaceListDto(IReadOnlyList<MapPlaceDto> Places);
 public sealed record SuggestionDto(string GooglePlaceId, string Name, string Address);
 public sealed record SuggestionListDto(IReadOnlyList<SuggestionDto> Suggestions);
 public sealed record ResolvedPlaceDto(string Name, string Address, double Lat, double Lng);
+public sealed record NearbyPlaceDto(string Name, string Address, double Lat, double Lng, int DistanceM);
+public sealed record NearbyPlaceListDto(IReadOnlyList<NearbyPlaceDto> Places);
 
 /// <summary>
 /// Cafés. A place row is created implicitly by the first rating there — there is no "add a place"
@@ -147,6 +149,32 @@ public static partial class PlaceEndpoints
                 ApiJsonSerializerContext.Default.ResolvedPlaceDto);
         });
 
+        // "Which café am I in?" — the picker's "Use my location". The position is passed straight to
+        // Google and dropped; nothing here logs or stores it.
+        app.MapGet("/v1/places/nearby", async (
+            double? lat, double? lng,
+            AuthContext auth, IGooglePlacesClient google, HttpRequest request, CancellationToken ct) =>
+        {
+            if (!auth.TryRequireUser(out _, out var failure)) return failure;
+
+            if (lat is not { } latitude || lng is not { } longitude || !AreCoordinatesValid(lat, lng))
+                return ApiResults.BadRequest("invalid_location");
+
+            if (!google.IsConfigured) return PlaceSearchUnavailable();
+
+            var places = await google.NearbyAsync(latitude, longitude, PreferredLanguage(request), ct);
+            if (places is null) return PlaceSearchFailed();
+
+            // Google already ranks by distance; sorting again on our own number keeps the list and the
+            // "120 m" labels next to it consistent.
+            var dtos = places
+                .Select(p => new NearbyPlaceDto(
+                    p.Name, p.Address, p.Lat, p.Lng, DistanceMetres(latitude, longitude, p.Lat, p.Lng)))
+                .OrderBy(p => p.DistanceM)
+                .ToList();
+            return Results.Json(new NearbyPlaceListDto(dtos), ApiJsonSerializerContext.Default.NearbyPlaceListDto);
+        });
+
         app.MapGet("/v1/places/{placeId}", async (
             string placeId, AuthContext auth, CoffeeDb db, CancellationToken ct) =>
         {
@@ -225,6 +253,19 @@ public static partial class PlaceEndpoints
         if (lat is null && lng is null) return true;
         if (lat is null || lng is null) return false;
         return lat is >= -90 and <= 90 && lng is >= -180 and <= 180;
+    }
+
+    /// <summary>Great-circle distance in whole metres (haversine) — plenty for "120 m away".</summary>
+    internal static int DistanceMetres(double lat1, double lng1, double lat2, double lng2)
+    {
+        const double earthRadiusMetres = 6_371_000;
+        static double Rad(double degrees) => degrees * Math.PI / 180;
+
+        var dLat = Rad(lat2 - lat1);
+        var dLng = Rad(lng2 - lng1);
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2)
+              + Math.Cos(Rad(lat1)) * Math.Cos(Rad(lat2)) * Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+        return (int)Math.Round(2 * earthRadiusMetres * Math.Asin(Math.Min(1, Math.Sqrt(a))));
     }
 
     /// <summary>First tag of <c>Accept-Language</c> ("lt-LT,lt;q=0.9" → "lt-LT"), passed on as

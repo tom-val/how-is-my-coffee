@@ -87,10 +87,15 @@ namespace Coffee.Api.Shared.Serialization;
 [JsonSerializable(typeof(List<SuggestionDto>))]
 [JsonSerializable(typeof(SuggestionListDto))]
 [JsonSerializable(typeof(ResolvedPlaceDto))]
+[JsonSerializable(typeof(NearbyPlaceDto))]
+[JsonSerializable(typeof(List<NearbyPlaceDto>))]
+[JsonSerializable(typeof(NearbyPlaceListDto))]
 // Google Places (New) wire shapes — the proxy behind /v1/places/suggest.
 [JsonSerializable(typeof(GoogleAutocompleteRequest))]
 [JsonSerializable(typeof(GoogleAutocompleteResponse))]
 [JsonSerializable(typeof(GooglePlaceDetailsResponse))]
+[JsonSerializable(typeof(GoogleNearbyRequest))]
+[JsonSerializable(typeof(GoogleNearbyResponse))]
 // Caffeine.
 [JsonSerializable(typeof(ResolveCaffeineBody))]
 [JsonSerializable(typeof(ResolveCaffeineDto))]

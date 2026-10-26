@@ -19,6 +19,7 @@ public class PlaceSuggestEndpointTests(TestAppFactory factory) : IClassFixture<T
     [Theory]
     [InlineData("/v1/places/suggest?q=Vero&session=" + Session)]
     [InlineData("/v1/places/suggest/ChIJAAAAAAAAAAAAAAA?session=" + Session)]
+    [InlineData("/v1/places/nearby?lat=54.6811&lng=25.295")]
     public async Task Without_a_key_place_search_is_unavailable(string path)
     {
         var response = await AuthenticatedClient().GetAsync(path);
@@ -36,6 +37,30 @@ public class PlaceSuggestEndpointTests(TestAppFactory factory) : IClassFixture<T
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("\"error\":\"invalid_session\"", await response.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData("/v1/places/nearby")]
+    [InlineData("/v1/places/nearby?lat=54.68")]
+    [InlineData("/v1/places/nearby?lng=25.29")]
+    [InlineData("/v1/places/nearby?lat=91&lng=25.29")]
+    [InlineData("/v1/places/nearby?lat=54.68&lng=181")]
+    public async Task Nearby_needs_both_coordinates_in_range_before_the_key_is_looked_at(string path)
+    {
+        var response = await AuthenticatedClient().GetAsync(path);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("\"error\":\"invalid_location\"", await response.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData(54.6811, 25.2950, 54.6811, 25.2950, 0)]
+    [InlineData(54.6811, 25.2950, 54.6820, 25.2950, 100)]   // 0.0009° of latitude ≈ 100 m
+    [InlineData(54.6872, 25.2797, 54.6834, 25.2893, 748)]   // Cathedral Square → Pilies g.
+    public void Distance_is_whole_metres_along_the_ground(
+        double lat1, double lng1, double lat2, double lng2, int expected)
+    {
+        Assert.InRange(Coffee.Api.Features.Places.PlaceEndpoints.DistanceMetres(lat1, lng1, lat2, lng2), expected - 2, expected + 2);
     }
 
     private HttpClient AuthenticatedClient()

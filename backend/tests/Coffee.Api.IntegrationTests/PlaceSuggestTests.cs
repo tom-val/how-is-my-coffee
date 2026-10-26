@@ -17,6 +17,7 @@ public class PlaceSuggestTests(IntegrationFixture fixture) : IntegrationTestBase
     [SkippableTheory]
     [InlineData("/v1/places/suggest?q=Vero&session=" + Session)]
     [InlineData("/v1/places/suggest/" + GoogleId + "?session=" + Session)]
+    [InlineData("/v1/places/nearby?lat=54.6811&lng=25.295")]
     public async Task Place_search_needs_a_token(string path)
     {
         RequireInfrastructure();
@@ -31,6 +32,7 @@ public class PlaceSuggestTests(IntegrationFixture fixture) : IntegrationTestBase
     [InlineData("/v1/places/suggest?q=Vero&session=" + Session)]
     [InlineData("/v1/places/suggest?q=V&session=" + Session)]
     [InlineData("/v1/places/suggest/" + GoogleId + "?session=" + Session)]
+    [InlineData("/v1/places/nearby?lat=54.6811&lng=25.295")]
     public async Task Without_a_configured_key_both_endpoints_answer_503(string path)
     {
         RequireInfrastructure();
@@ -50,6 +52,8 @@ public class PlaceSuggestTests(IntegrationFixture fixture) : IntegrationTestBase
     [InlineData("/v1/places/suggest/" + GoogleId + "?session=nope", "invalid_session")]
     [InlineData("/v1/places/suggest/short?session=" + Session, "invalid_place_id")]
     [InlineData("/v1/places/suggest/has.a.dot.in.it?session=" + Session, "invalid_place_id")]
+    [InlineData("/v1/places/nearby?lat=54.68", "invalid_location")]
+    [InlineData("/v1/places/nearby?lat=-91&lng=25.29", "invalid_location")]
     public async Task A_malformed_request_is_a_400_with_a_code_the_app_can_map(string path, string error)
     {
         RequireInfrastructure();

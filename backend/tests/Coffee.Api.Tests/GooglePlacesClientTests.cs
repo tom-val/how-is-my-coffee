@@ -184,7 +184,80 @@ public class GooglePlacesClientTests
         Assert.False(client.IsConfigured);
         Assert.Null(await client.AutocompleteAsync("Vero", Session, null, null, null, CancellationToken.None));
         Assert.Null(await client.GetDetailsAsync("ChIJAAAAAAAAAAAAAAA", Session, null, CancellationToken.None));
+        Assert.Null(await client.NearbyAsync(54.6872, 25.2797, null, CancellationToken.None));
         Assert.Empty(handler.Calls);
+    }
+
+    [Fact]
+    public async Task Nearby_posts_a_distance_ranked_150_m_cafe_search_with_the_pro_field_mask()
+    {
+        var handler = FakeHandler.Returning(HttpStatusCode.OK, """
+            {
+              "places": [
+                {
+                  "displayName": { "text": "Mėta & Kava", "languageCode": "lt" },
+                  "formattedAddress": "Užupio g. 7, Vilnius",
+                  "location": { "latitude": 54.6811, "longitude": 25.2950 }
+                }
+              ]
+            }
+            """);
+
+        var places = await Client(handler).NearbyAsync(54.68105, 25.29495, "lt", CancellationToken.None);
+
+        var only = Assert.Single(places!);
+        Assert.Equal("Mėta & Kava", only.Name);
+        Assert.Equal("Užupio g. 7, Vilnius", only.Address);
+        Assert.Equal(54.6811, only.Lat, 4);
+        Assert.Equal(25.2950, only.Lng, 4);
+
+        var request = Assert.Single(handler.Calls);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Equal("https://places.googleapis.com/v1/places:searchNearby", request.Url);
+        Assert.Equal(ValidKey, request.Header("X-Goog-Api-Key"));
+        Assert.Equal("places.displayName,places.formattedAddress,places.location", request.Header("X-Goog-FieldMask"));
+
+        var body = JsonDocument.Parse(request.Body).RootElement;
+        Assert.Equal(["cafe", "coffee_shop", "bakery"], body.GetProperty("includedTypes").EnumerateArray().Select(t => t.GetString()));
+        Assert.Equal(5, body.GetProperty("maxResultCount").GetInt32());
+        Assert.Equal("DISTANCE", body.GetProperty("rankPreference").GetString());
+        Assert.Equal("lt", body.GetProperty("languageCode").GetString());
+        var circle = body.GetProperty("locationRestriction").GetProperty("circle");
+        Assert.Equal(54.68105, circle.GetProperty("center").GetProperty("latitude").GetDouble(), 5);
+        Assert.Equal(25.29495, circle.GetProperty("center").GetProperty("longitude").GetDouble(), 5);
+        Assert.Equal(150, circle.GetProperty("radius").GetDouble());
+    }
+
+    [Fact]
+    public async Task Nearby_drops_places_without_a_name_or_a_location_and_reads_an_empty_answer_as_none()
+    {
+        var handler = FakeHandler.Returning(HttpStatusCode.OK, """
+            {"places":[{"displayName":{"text":"No pin"}},
+                       {"location":{"latitude":54.68,"longitude":25.29}},
+                       {"displayName":{"text":"  "},"location":{"latitude":54.68,"longitude":25.29}},
+                       {"displayName":{"text":"Pupelė"},"location":{"latitude":54.68,"longitude":25.29}}]}
+            """);
+
+        var places = await Client(handler).NearbyAsync(54.68, 25.29, null, CancellationToken.None);
+
+        Assert.Equal(["Pupelė"], places!.Select(p => p.Name));
+        Assert.Equal(string.Empty, places![0].Address);
+        Assert.False(JsonDocument.Parse(handler.Calls[0].Body).RootElement.TryGetProperty("languageCode", out _));
+
+        // Google answers `{}` when nothing is in range — that is "no cafés", not a failure.
+        var empty = await Client(FakeHandler.Returning(HttpStatusCode.OK, "{}"))
+            .NearbyAsync(54.68, 25.29, null, CancellationToken.None);
+        Assert.NotNull(empty);
+        Assert.Empty(empty);
+    }
+
+    [Fact]
+    public async Task Nearby_upstream_failure_is_a_miss()
+    {
+        var places = await Client(FakeHandler.Returning(HttpStatusCode.Forbidden, "{}"))
+            .NearbyAsync(54.68, 25.29, null, CancellationToken.None);
+
+        Assert.Null(places);
     }
 
     private static GooglePlacesClient Client(

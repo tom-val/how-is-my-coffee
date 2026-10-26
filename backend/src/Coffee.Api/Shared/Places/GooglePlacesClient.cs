@@ -30,6 +30,18 @@ public sealed record GoogleAutocompleteResponse(List<GoogleSuggestion>? Suggesti
 public sealed record GooglePlaceDetailsResponse(
     string? Id, GoogleText? DisplayName, string? FormattedAddress, GoogleLatLng? Location);
 
+public sealed record GoogleLocationRestriction(GoogleCircle Circle);
+
+public sealed record GoogleNearbyRequest(
+    string[] IncludedTypes,
+    int MaxResultCount,
+    string RankPreference,
+    GoogleLocationRestriction LocationRestriction,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LanguageCode);
+
+/// <summary>Nearby Search answers with the same place shape as Details, wrapped in a list.</summary>
+public sealed record GoogleNearbyResponse(List<GooglePlaceDetailsResponse>? Places);
+
 /// <summary>One autocomplete hit, flattened out of Google's nested prediction shape.</summary>
 public sealed record GooglePlaceSuggestion(string GooglePlaceId, string Name, string Address);
 
@@ -51,6 +63,11 @@ public interface IGooglePlacesClient
     /// <summary>Details for one prediction, or null on any upstream failure (a 404 included).</summary>
     Task<GooglePlaceDetails?> GetDetailsAsync(
         string googlePlaceId, string sessionToken, string? languageCode, CancellationToken ct);
+
+    /// <summary>Cafés within <see cref="GooglePlacesClient.NearbyRadiusMetres"/> of a point, closest first;
+    /// null on any upstream failure, empty when nothing is in range.</summary>
+    Task<IReadOnlyList<GooglePlaceDetails>?> NearbyAsync(
+        double lat, double lng, string? languageCode, CancellationToken ct);
 }
 
 /// <summary>
@@ -67,10 +84,20 @@ public sealed class GooglePlacesClient : IGooglePlacesClient
 {
     private const string BaseUrl = "https://places.googleapis.com/v1/";
     private const string DetailsFieldMask = "id,displayName,formattedAddress,location";
+    private const string NearbyFieldMask = "places.displayName,places.formattedAddress,places.location";
     private const double LocationBiasRadiusMetres = 25_000;
+    private const int MaxNearbyResults = 5;
+
+    /// <summary>"Which café am I in": GPS indoors is good to a few tens of metres, so a street's width
+    /// either way. Wider and the café next door but two outranks nothing; narrower and a weak fix misses.</summary>
+    public const double NearbyRadiusMetres = 150;
 
     /// <summary>Cafés first, then the other places people log coffee at.</summary>
     private static readonly string[] PrimaryTypes = ["cafe", "coffee_shop", "bakery", "restaurant", "bar"];
+
+    /// <summary>Narrower than search on purpose: by distance alone, the restaurant next door would push
+    /// the café you are sitting in off a five-row list.</summary>
+    private static readonly string[] NearbyTypes = ["cafe", "coffee_shop", "bakery"];
 
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
 
@@ -150,6 +177,47 @@ public sealed class GooglePlacesClient : IGooglePlacesClient
             parsed.FormattedAddress ?? string.Empty,
             parsed.Location.Latitude,
             parsed.Location.Longitude);
+    }
+
+    public async Task<IReadOnlyList<GooglePlaceDetails>?> NearbyAsync(
+        double lat, double lng, string? languageCode, CancellationToken ct)
+    {
+        if (!IsConfigured) return null;
+
+        var body = new GoogleNearbyRequest(
+            NearbyTypes,
+            MaxNearbyResults,
+            "DISTANCE",
+            new GoogleLocationRestriction(new GoogleCircle(new GoogleLatLng(lat, lng), NearbyRadiusMetres)),
+            languageCode);
+
+        var parsed = await SendAsync("nearby", ApiJsonSerializerContext.Default.GoogleNearbyResponse, ct, () =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}places:searchNearby")
+            {
+                Content = new StringContent(
+                    JsonSerializer.Serialize(body, ApiJsonSerializerContext.Default.GoogleNearbyRequest),
+                    Encoding.UTF8,
+                    "application/json"),
+            };
+            request.Headers.Add("X-Goog-FieldMask", NearbyFieldMask);
+            return request;
+        });
+
+        if (parsed is null) return null;
+
+        // A place the user cannot recognise (no name) or we cannot pin (no location) is no answer to
+        // "which café am I in", so it is dropped rather than shown as a blank row.
+        return
+        [
+            .. (parsed.Places ?? [])
+                .Where(p => p.Location is not null && !string.IsNullOrWhiteSpace(p.DisplayName?.Text))
+                .Select(p => new GooglePlaceDetails(
+                    p.DisplayName!.Text!,
+                    p.FormattedAddress ?? string.Empty,
+                    p.Location!.Latitude,
+                    p.Location.Longitude)),
+        ];
     }
 
     /// <summary>Send, check the status, deserialize — the three ways this integration can fail, each
