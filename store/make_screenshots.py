@@ -1,7 +1,9 @@
 """Turns the raw simulator/emulator captures in store/screenshots/raw/ into upload-ready sets.
 
-  App Store, 6.9" iPhone (required size): 1320×2868 — the iPhone 17 Pro captures (1206×2622) have
-  the same aspect ratio within 0.1 %, so they are scaled with Lanczos and trimmed by a pixel.
+  App Store, "iPhone with Dynamic Island (medium display)" — the required set: 1206×2622, which is
+  exactly what the iPhone 17 Pro simulator captures, so they are only flattened (no alpha allowed).
+  App Store, "iPhone with Dynamic Island (large display)" (6.9"): 1320×2868 — the same captures have
+  that aspect ratio within 0.1 %, so they are scaled with Lanczos and trimmed by a pixel.
   Google Play phone: the emulator's 1080×2400 is 2.22:1 and Play caps the long side at 2× the short
   one, so the frame is widened to 1200×2400 with the page's own background colour at the sides
   (cropping would cut either the header or the tab bar).
@@ -39,22 +41,27 @@ def as_is(src: pathlib.Path, dst: pathlib.Path):
     assert im.width * 16 == im.height * 9, f"{src.name} is not 9:16"
     im.save(dst, optimize=True)
 
-TARGETS = {  # raw file prefix -> (output folder, converter)
-    "ios": ("app-store-6.9", ios),
-    "android": ("google-play-phone", android),
-    "tablet7": ("google-play-tablet-7", as_is),
-    "tablet10": ("google-play-tablet-10", as_is),
+def ios_medium(src: pathlib.Path, dst: pathlib.Path):
+    im = Image.open(src).convert("RGB")
+    assert im.size == (1206, 2622), f"{src.name} is {im.size}, expected an iPhone 17 Pro capture"
+    im.save(dst, optimize=True)
+
+TARGETS = {  # raw file prefix -> [(output folder, converter)]
+    "ios": [("app-store-6.3", ios_medium), ("app-store-6.9", ios)],
+    "android": [("google-play-phone", android)],
+    "tablet7": [("google-play-tablet-7", as_is)],
+    "tablet10": [("google-play-tablet-10", as_is)],
 }
 
 made = []
 for src in sorted(RAW.glob("*.png")):
     platform, lang, rest = src.stem.split("-", 2)
-    name, convert = TARGETS[platform]
-    folder = ROOT / name / lang
-    folder.mkdir(parents=True, exist_ok=True)
-    dst = folder / f"{rest}.png"
-    convert(src, dst)
-    made.append(dst)
+    for name, convert in TARGETS[platform]:
+        folder = ROOT / name / lang
+        folder.mkdir(parents=True, exist_ok=True)
+        dst = folder / f"{rest}.png"
+        convert(src, dst)
+        made.append(dst)
 
 for p in made:
     w, h = Image.open(p).size

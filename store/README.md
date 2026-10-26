@@ -8,7 +8,8 @@ together.
 | What | Where |
 |---|---|
 | Listing texts (both stores, en-GB + lt) | `listing.py` → generated copy-paste sheet `LISTING.md` (run `python3 store/listing.py`; it checks every limit) |
-| Screenshots, App Store 6.9" (1320×2868) | `screenshots/app-store-6.9/{en,lt}/` — 5 each |
+| Screenshots, App Store iPhone medium display — **required** (1206×2622) | `screenshots/app-store-6.3/{en,lt}/` — 5 each |
+| Screenshots, App Store iPhone large display 6.9" (1320×2868) | `screenshots/app-store-6.9/{en,lt}/` — 5 each |
 | Screenshots, Google Play phone (1200×2400) | `screenshots/google-play-phone/{en,lt}/` — 4 each |
 | Screenshots, Google Play 7" tablet (1080×1920) | `screenshots/google-play-tablet-7/{en,lt}/` — 4 each |
 | Screenshots, Google Play 10" tablet (1440×2560) | `screenshots/google-play-tablet-10/{en,lt}/` — 4 each |
@@ -50,8 +51,11 @@ Contact on all pages: `tomas@valiunas.dev`.
   scrutiny and the app's core is the coffee journal.
 - **Copyright:** `2026 Tomas Valiūnas`
 - **Support URL / Privacy Policy URL / Marketing URL:** table above.
-- **Screenshots:** iPhone 6.9" only (`screenshots/app-store-6.9/`). The app is iPhone-only
-  (`supportsTablet: false`), so no iPad screenshots are needed.
+- **Screenshots:** "iPhone with Dynamic Island (medium display)" is the required tab:
+  `screenshots/app-store-6.3/` (1206×2622, native iPhone 17 Pro captures). Under *View All Sizes in
+  Media Manager*, add `screenshots/app-store-6.9/` to "iPhone with Dynamic Island (large display)"
+  (1320×2868) — without it Apple wants a Face ID large-display set instead. iPhone Duo is optional
+  until April 2027. The app is iPhone-only (`supportsTablet: false`), so no iPad screenshots.
 - **Age rating questionnaire:** violence, sexual content, profanity, drugs, gambling, horror,
   medical: **None**. *User-generated content*: **Yes**. *Messaging/chat*: **No** (public comments
   only). *Unrestricted web access*: **No**. Expect **13+** (Apple's 2025 tiers).
