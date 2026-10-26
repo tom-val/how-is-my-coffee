@@ -85,6 +85,9 @@ Contact on all pages: `tomas@valiunas.dev`.
 - **Upload key:** the EAS production keystore, SHA-1 `9B:D7:AE:5B:51:60:BE:F8:F0:24:1A:C9:2A:C0:06:26:DB:C4:7D:80`.
   The Play app was first set up with kindergarten's upload key (`6E:D8…`) by mistake; an upload-key
   reset to Kavutė's own key was requested 2026-10-26 and takes effect 2026-10-28 08:12 UTC.
+- **Play app signing key** (what Play Store installs are signed with): SHA-1
+  `0F:13:0A:7F:E6:3B:C4:C2:66:30:B2:C2:6D:E8:BA:EC:FA:40:AB:A3`. The Android Maps key must allow
+  `com.tomval.kavute` with this SHA-1 (Play installs) and with `9B:D7…` (preview APKs).
 - **App content tasks:**
 
 | Task | Answer |
