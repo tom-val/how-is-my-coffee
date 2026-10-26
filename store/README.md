@@ -120,7 +120,7 @@ action from you (listed above).
 | Act on reports within 24 h + contact info | Apple 1.2 | ⚠️ | Moderator push + Admin workflow; you must actually watch it (step 2) |
 | Zero-tolerance terms accepted at sign-up | Apple 1.2 | ✅ | Terms §5; register states agreement with links |
 | Demo account for review | Apple 2.1, Play | ⚠️ | Create `app_review` (step 3) |
-| Only needed permissions, specific purpose strings | Apple 5.1.1, Play | ✅ | iOS: camera, photos, location when-in-use only; Android: location + internet; storage/media/biometric/background blocked |
+| Only needed permissions, specific purpose strings | Apple 5.1.1, Play | ✅ | iOS: camera, photos, location when-in-use; plus a motion string that says it is unused (expo-location links Core Motion and Apple's scanner rejects the binary without it, ITMS-90683); Android: location + internet; storage/media/biometric/background blocked |
 | Privacy manifest (required-reason APIs) | Apple (2024+) | ✅ | `ios.privacyManifests` |
 | No tracking / ATT not needed | Apple 5.1.2 | ✅ | No ads, analytics or tracking SDKs |
 | Sign in with Apple | Apple 4.8 | ✅ n/a | Only first-party username login, no third-party sign-in |

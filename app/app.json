@@ -167,7 +167,7 @@
           "locationWhenInUsePermission": "Kavutė uses your location while the app is open to centre the map on you and to suggest the café you are in when you rate a coffee. Your location is not saved to your account.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
-          "motionUsagePermission": false
+          "motionUsagePermission": "Kavutė does not use motion or fitness data. This description is required only because the location component it is built with can read motion activity; Kavutė never turns that on."
         }
       ],
       [
