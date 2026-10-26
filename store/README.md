@@ -82,6 +82,9 @@ Contact on all pages: `tomas@valiunas.dev`.
   10-inch tablet `screenshots/google-play-tablet-10/` (all 9:16 or 1:2, each per language). The
   tablet shots are real tablet-sized emulator captures: the app keeps its phone-width column there.
 - **Category:** Food & Drink. **Contact email:** tomas@valiunas.dev. **Website:** coffee.valiunas.dev.
+- **Upload key:** the EAS production keystore, SHA-1 `9B:D7:AE:5B:51:60:BE:F8:F0:24:1A:C9:2A:C0:06:26:DB:C4:7D:80`.
+  The Play app was first set up with kindergarten's upload key (`6E:D8…`) by mistake; an upload-key
+  reset to Kavutė's own key was requested 2026-10-26 and takes effect 2026-10-28 08:12 UTC.
 - **App content tasks:**
 
 | Task | Answer |
