@@ -171,9 +171,19 @@ so the web app and native apps can use the CloudFront origin as the API base.
   - Proxies **Place Details (New)** (`GET https://places.googleapis.com/v1/places/{id}?sessionToken=`) with field mask
     `id,displayName,formattedAddress,location` — Essentials tier, which also closes the autocomplete session so keystrokes are billed as one session.
   - The client turns `name` into `placeId = place_<snake_case(name)>` exactly as before; Google's id is not stored anywhere.
-- Config `Google:PlacesApiKey` (Lambda env `Google__PlacesApiKey`; local dev: `appsettings.Local.json`, gitignored). When unset, both endpoints answer
+- `GET /v1/places/nearby?lat=<n>&lng=<n>` → `{ places: NearbyPlaceDto[] }` (auth required) — "which café am I in?" for the picker's "Use my location"
+  - Proxies **Nearby Search (New)** (`POST https://places.googleapis.com/v1/places:searchNearby`) with `includedTypes=["cafe","coffee_shop","bakery"]`,
+    `rankPreference="DISTANCE"`, `maxResultCount=5`, `locationRestriction = circle(center, radius 150 m)` and field mask
+    `places.displayName,places.formattedAddress,places.location`. No session token (Nearby Search is not session-billed).
+  - `NearbyPlaceDto = { name, address, lat, lng, distanceM }` — the café's own coordinates; `distanceM` = whole metres from the given point
+    (haversine), closest first. Places with no name or no location are dropped. Empty list when nothing is in range.
+  - `lat` and `lng` are both required (missing / out of range → 400 `invalid_location`). The app rounds them to 4 decimals (~10 m).
+    The position is not logged or stored; only the café the user then picks is saved, as with any rating.
+  - The app shows these above a "use this address" row; with no results, or when the endpoint answers 503/502, it falls back to the
+    device's reverse geocode as before.
+- Config `Google:PlacesApiKey` (Lambda env `Google__PlacesApiKey`; local dev: `appsettings.Local.json`, gitignored). When unset, all three endpoints answer
   `503 { "error": "place_search_unavailable" }` and the app falls back to Nominatim. Upstream failure / timeout (5 s) → `502 { "error": "place_search_failed" }`.
-- 400 codes: `invalid_session` (missing / non-UUID session), `invalid_query` (`q` > 100 chars), `invalid_location` (lat/lng out of range or only one given), `invalid_place_id` (id not matching `^[A-Za-z0-9_-]{10,200}$`). Validation runs before the 503 check.
+- 400 codes: `invalid_session` (missing / non-UUID session), `invalid_query` (`q` > 100 chars), `invalid_location` (lat/lng out of range or only one given; on `/nearby` both are required), `invalid_place_id` (id not matching `^[A-Za-z0-9_-]{10,200}$`). Validation runs before the 503 check.
 - Never log the key or the full upstream URL. Language: pass `languageCode` from the request's `Accept-Language` (first tag) when present.
 
 ### Push notifications (NEW — Expo push, sent by the API itself, no queue)
