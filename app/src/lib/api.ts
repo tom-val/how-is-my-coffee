@@ -21,6 +21,7 @@ import type {
   MapPlace,
   NotificationPrefs,
   Place,
+  NearbyPlace,
   PlaceSuggestionDto,
   PushPlatform,
   ResolvedPlace,
@@ -303,6 +304,16 @@ export const api = {
   resolveSuggestion: (googlePlaceId: string, session: string, signal?: AbortSignal) =>
     request<ResolvedPlace>(
       `/v1/places/suggest/${encodeURIComponent(googlePlaceId)}?session=${encodeURIComponent(session)}`,
+      { signal },
+    ),
+
+  /**
+   * Cafés within ~150 m of a point, closest first — the "Use my location" rows. Same 503/502 codes
+   * as `suggestPlaces`; no session token, Nearby Search is billed per request.
+   */
+  nearbyPlaces: (lat: number, lng: number, signal?: AbortSignal) =>
+    request<{ places: NearbyPlace[] }>(
+      `/v1/places/nearby?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`,
       { signal },
     ),
 

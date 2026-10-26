@@ -28,6 +28,8 @@ export type SearchHit = {
   googlePlaceId?: string;
   lat?: number;
   lng?: number;
+  /** Nearby hits only: metres from where the user is standing. */
+  distanceM?: number;
 };
 
 export type SearchOutcome = { source: SearchSource; hits: SearchHit[] };
@@ -105,6 +107,37 @@ export async function searchSuggestions(
       lng: h.lng,
     })),
   };
+}
+
+/**
+ * The cafés around a device position, closest first — what "Use my location" offers before falling
+ * back to a street address. The position is rounded to 4 decimals (~10 m): enough to tell the café
+ * you are in from the one across the street, without sending the raw GPS fix.
+ *
+ * Never throws. An empty list means "nothing in range" OR "Google is not available" — either way
+ * the picker falls back to the reverse-geocoded address, so it never needs to tell them apart.
+ */
+export async function nearbyCafes(
+  lat: number,
+  lng: number,
+  signal?: AbortSignal,
+): Promise<SearchHit[]> {
+  if (proxyUnavailable) return [];
+  const round = (n: number) => Math.round(n * 10_000) / 10_000;
+  try {
+    const { places } = await api.nearbyPlaces(round(lat), round(lng), signal);
+    return places.map((p, i) => ({
+      id: `nearby-${i}`,
+      name: p.name,
+      address: p.address,
+      lat: p.lat,
+      lng: p.lng,
+      distanceM: p.distanceM,
+    }));
+  } catch (e) {
+    if (isUnavailable(e)) proxyUnavailable = true;
+    return [];
+  }
 }
 
 /**

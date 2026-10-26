@@ -127,6 +127,18 @@ export interface ResolvedPlace {
   lng: number;
 }
 
+/**
+ * One café from `GET /v1/places/nearby` — "which café am I in?". The café's own coordinates, and
+ * how far it is from the position that was asked about.
+ */
+export interface NearbyPlace {
+  name: string;
+  address?: string;
+  lat: number;
+  lng: number;
+  distanceM: number;
+}
+
 /** A place someone has been to, as listed on a profile. */
 export interface UserPlace {
   placeId: string;

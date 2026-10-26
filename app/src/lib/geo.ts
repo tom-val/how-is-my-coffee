@@ -77,6 +77,16 @@ export function boundsToRegion(bounds: MapBounds): MapRegion {
   };
 }
 
+/** Great-circle distance in whole metres (haversine) — the same sum the API does for `distanceM`. */
+export function distanceMetres(a: LatLng, b: LatLng): number {
+  const rad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(2 * 6_371_000 * Math.asin(Math.min(1, Math.sqrt(h))));
+}
+
 /** Roughly a city block — the tightest we ever zoom, so a single pin does not land in the void. */
 const MIN_DELTA = 0.004;
 

@@ -49,7 +49,7 @@ const EN: LegalDoc = {
       heading: '3. Your location',
       blocks: [
         {
-          p: 'With your permission, the app reads your device’s location to centre the map on where you are and to suggest the café you are sitting in. Turning that position into a street address is done by your phone’s own location service (Apple on iOS, Google on Android).',
+          p: 'With your permission, the app reads your device’s location to centre the map on where you are and to suggest the café you are sitting in. Turning that position into a street address is done by your phone’s own location service (Apple on iOS, Google on Android). When you tap “Use my location” while choosing a café, your position, rounded to about 10 metres, is also sent to our server, which asks Google Places for the cafés within about 150 metres so you can pick the one you are in. That position is used only for this one request: it is not logged or stored.',
         },
         {
           p: 'When you search for a café, the text you type is sent to our server together with your approximate position, rounded to about 1 km (or, if the app does not know it, the location of the café you rated most recently), and our server passes both to Google Places so that nearby cafés come first. When you browse the map, the visible map area is sent to our server to find cafés in it. None of this is stored: your location is never saved to your account. The only coordinates we keep are those of the café you choose for a rating. If you use “Use my location” to pick the café, those coordinates are your device’s position at that moment, and they are saved with the rating and visible to other users like any café location.',
@@ -98,7 +98,7 @@ const EN: LegalDoc = {
         {
           bullets: [
             'Amazon Web Services (AWS) — hosts our server, the database and the photo storage, in the EU (Ireland, eu-west-1), and delivers the web app and photos through its content-delivery network.',
-            'Google Places API — café search: the text you type and your approximate position (see section 3), sent from our server. Google’s own identifier for the café is not stored.',
+            'Google Places API — café search: the text you type and your approximate position, and, when you tap “Use my location”, your position rounded to about 10 metres (see section 3), sent from our server. Google’s own identifier for the café is not stored.',
             'OpenAI — only the name of a drink, and only when our built-in caffeine table has no match for it, to estimate its caffeine content. No username, account or other personal data is sent.',
             'Expo (650 Industries) — delivers push notifications to your phone through Apple Push Notification service and Google Firebase Cloud Messaging (it receives your push token and the notification text, e.g. "Alice liked your flat white"), and serves app updates (it sees your IP address and app version).',
             'OpenStreetMap — Nominatim, the fallback café search when Google search is unavailable (it receives only the text you type), and the map tiles on the web version (your browser requests the tiles for the visible map area).',
@@ -219,7 +219,7 @@ const LT: LegalDoc = {
       heading: '3. Jūsų buvimo vieta',
       blocks: [
         {
-          p: 'Jums leidus, programėlė nuskaito įrenginio buvimo vietą, kad centruotų žemėlapį ties jumis ir pasiūlytų kavinę, kurioje sėdite. Jūsų buvimo vietą į gatvės adresą paverčia pačio telefono vietos paslauga („Apple“ – „iOS“, „Google“ – „Android“).',
+          p: 'Jums leidus, programėlė nuskaito įrenginio buvimo vietą, kad centruotų žemėlapį ties jumis ir pasiūlytų kavinę, kurioje sėdite. Jūsų buvimo vietą į gatvės adresą paverčia pačio telefono vietos paslauga („Apple“ – „iOS“, „Google“ – „Android“). Kai rinkdamiesi kavinę paspaudžiate „Naudoti mano vietą“, jūsų buvimo vieta, suapvalinta maždaug iki 10 metrų, taip pat siunčiama mūsų serveriui, o šis paprašo „Google Places“ kavinių, esančių maždaug 150 metrų spinduliu, kad galėtumėte pasirinkti tą, kurioje esate. Ši vieta naudojama tik šiai vienai užklausai: ji neregistruojama ir nesaugoma.',
         },
         {
           p: 'Kai ieškote kavinės, jūsų įvestas tekstas kartu su apytiksle jūsų buvimo vieta, suapvalinta maždaug iki 1 km (arba, jei programėlė jos nežino, paskutinės jūsų įvertintos kavinės vieta) siunčiamas mūsų serveriui, o šis abu perduoda „Google Places“, kad pirmiausia būtų rodomos netoliese esančios kavinės. Kai naršote žemėlapį, matoma žemėlapio sritis siunčiama mūsų serveriui, kad jame būtų rastos kavinės. Niekas iš to nesaugoma: jūsų buvimo vieta niekada neįrašoma į jūsų paskyrą. Saugome tik tos kavinės, kurią pasirenkate įvertinimui, koordinates. Jei kavinę pasirenkate mygtuku „Naudoti mano vietą“, tos koordinatės yra jūsų įrenginio buvimo vieta tuo metu: jos išsaugomos su įvertinimu ir, kaip ir bet kurios kavinės vieta, matomos kitiems naudotojams.',
@@ -268,7 +268,7 @@ const LT: LegalDoc = {
         {
           bullets: [
             '„Amazon Web Services“ (AWS) — talpina mūsų serverį, duomenų bazę ir nuotraukų saugyklą ES (Airijoje, eu-west-1) ir pristato žiniatinklio programėlę bei nuotraukas savo turinio pristatymo tinklu.',
-            '„Google Places API“ — kavinių paieška: jūsų įvestas tekstas ir apytikslė buvimo vieta (žr. 3 skyrių), siunčiami iš mūsų serverio. „Google“ kavinės identifikatorius nesaugomas.',
+            '„Google Places API“ — kavinių paieška: jūsų įvestas tekstas ir apytikslė buvimo vieta, o paspaudus „Naudoti mano vietą“ – jūsų buvimo vieta, suapvalinta maždaug iki 10 metrų (žr. 3 skyrių), siunčiami iš mūsų serverio. „Google“ kavinės identifikatorius nesaugomas.',
             '„OpenAI“ — tik gėrimo pavadinimas ir tik tada, kai mūsų įtaisytoje kofeino lentelėje jo nėra, kad būtų įvertintas kofeino kiekis. Vartotojo vardas, paskyra ar kiti asmens duomenys nesiunčiami.',
             '„Expo“ („650 Industries“) — pristato pranešimus į jūsų telefoną per „Apple Push Notification service“ ir „Google Firebase Cloud Messaging“ (gauna jūsų pranešimų prieigos raktą ir pranešimo tekstą, pvz., „Aistei patiko jūsų flat white“) ir teikia programėlės atnaujinimus (mato jūsų IP adresą ir programėlės versiją).',
             '„OpenStreetMap“ — „Nominatim“, atsarginė kavinių paieška, kai „Google“ paieška nepasiekiama (gauna tik jūsų įvestą tekstą), ir žemėlapio plytelės žiniatinklio versijoje (jūsų naršyklė užklausia matomos žemėlapio srities plytelių).',

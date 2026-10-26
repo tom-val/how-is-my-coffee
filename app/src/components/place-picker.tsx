@@ -6,8 +6,15 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 
 import { CrosshairIcon, PinIcon, SearchIcon } from './icons';
 import { Divider, Sheet, TextField, Txt } from './ui';
+import { distanceMetres, isFiniteCoord } from '@/lib/geo';
 import { placeIdFromName } from '@/lib/place';
-import { resolveHit, searchSuggestions, type SearchHit, type SearchSource } from '@/lib/placeSearch';
+import {
+  nearbyCafes,
+  resolveHit,
+  searchSuggestions,
+  type SearchHit,
+  type SearchSource,
+} from '@/lib/placeSearch';
 import { showToast } from '@/lib/toast';
 import { useDebounced } from '@/lib/useDebounced';
 import { colors, radius, spacing } from '@/theme';
@@ -31,13 +38,23 @@ function approximate(lat: number, lng: number): { lat: number; lng: number } {
   return { lat: Math.round(lat * 100) / 100, lng: Math.round(lng * 100) / 100 };
 }
 
+/** How close one of your own places has to be to count as "here" — the API's Nearby radius. */
+const NEARBY_METRES = 150;
+
+/** One "you are probably in…" row: a café, how far away it is, and what choosing it saves. */
+type NearbyRow = { key: string; distanceM: number; place: ChosenPlace };
+
+/** What "Use my location" found: cafés around you, plus the street address as the last resort. */
+type Here = { rows: NearbyRow[]; fromGoogle: boolean; address: ChosenPlace };
+
 /**
  * Picking the cafe: three ways in, in the order people actually use them.
  *
  * 1. Somewhere you have been before — one tap, and it keeps the existing `placeId` so the visit
  *    counts against the same place rather than creating a near-duplicate.
- * 2. Where you are right now — a reverse geocode of the device position, which on a phone in a cafe
- *    is usually the cafe.
+ * 2. Where you are right now — the cafés within ~150 m (your own places first, then Google's Nearby
+ *    Search through our API), closest first, with the street address as the last row. When nothing
+ *    is in range, or Google is not configured, the address is chosen straight away as before.
  * 3. A search — Google Places through our own API (`GET /v1/places/suggest`, which holds the key
  *    server-side), falling back to Nominatim when that endpoint is not configured.
  *
@@ -65,6 +82,7 @@ export function PlacePicker({
   const debounced = useDebounced(query.trim(), 400);
   const [locating, setLocating] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [here, setHere] = useState<Here | null>(null);
   // The results are stored WITH the query they answer, so "have we got results for what is typed
   // right now?" is a comparison rather than a second piece of state cleared from an effect.
   const [found, setFound] = useState<{ query: string; source: SearchSource; hits: SearchHit[] }>({
@@ -136,12 +154,14 @@ export function PlacePicker({
 
   const choose = (place: ChosenPlace) => {
     setQuery('');
+    setHere(null);
     endSession();
     onSelect(place);
     onClose();
   };
 
   const dismiss = () => {
+    setHere(null);
     endSession();
     onClose();
   };
@@ -181,23 +201,72 @@ export function PlacePicker({
         showToast(t('places.locationDenied'));
         return;
       }
+      // High, not Balanced: on iOS Balanced means "within 100 m", which cannot tell the café you
+      // are in from the one across the square. On Android, High can raise Google's "Location
+      // Accuracy" prompt; declining it rejects, and Balanced still gets a usable fix.
       const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
+        accuracy: Location.Accuracy.High,
+      }).catch(() => Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
       const { latitude, longitude } = position.coords;
       near.current = approximate(latitude, longitude);
-      // The reverse geocode is a nicety: without it we still have coordinates, and the user can
-      // type the cafe's name over whatever we guessed.
-      const [address] = await Location.reverseGeocodeAsync({ latitude, longitude }).catch(() => []);
-      const name = address?.name ?? address?.street ?? t('places.useMyLocation');
-      const full = [address?.street, address?.city, address?.country].filter(Boolean).join(', ');
-      choose({
+      const me = { lat: latitude, lng: longitude };
+
+      // Both lookups at once; each degrades to "nothing" on its own. The reverse geocode is the
+      // fallback row: without it we still have coordinates, and the user can type over the name.
+      const [[geocoded], google] = await Promise.all([
+        Location.reverseGeocodeAsync({ latitude, longitude }).catch(() => []),
+        nearbyCafes(latitude, longitude),
+      ]);
+      const name = geocoded?.name ?? geocoded?.street ?? t('places.useMyLocation');
+      const full = [geocoded?.street, geocoded?.city, geocoded?.country].filter(Boolean).join(', ');
+      const address: ChosenPlace = {
         placeId: placeIdFromName(name),
         placeName: name,
         address: full || undefined,
         lat: latitude,
         lng: longitude,
-      });
+      };
+
+      // Your own places first: picking one keeps its placeId, so the visit counts against the same
+      // café. A Google hit with the same name would derive the same id anyway, so it is dropped.
+      const mine: NearbyRow[] = previousPlaces
+        .filter((p) => isFiniteCoord(p.lat, p.lng))
+        .map((p) => ({ p, distanceM: distanceMetres(me, { lat: p.lat, lng: p.lng }) }))
+        .filter(({ distanceM }) => distanceM <= NEARBY_METRES)
+        .map(({ p, distanceM }) => ({
+          key: `mine-${p.placeId}`,
+          distanceM,
+          place: {
+            placeId: p.placeId,
+            placeName: p.placeName,
+            address: p.address,
+            lat: p.lat,
+            lng: p.lng,
+          },
+        }));
+      const taken = new Set(mine.map((r) => r.place.placeId));
+      const theirs: NearbyRow[] = google
+        .filter((h) => h.lat !== undefined && h.lng !== undefined)
+        .filter((h) => !taken.has(placeIdFromName(h.name)))
+        .map((h) => ({
+          key: h.id,
+          distanceM: h.distanceM ?? 0,
+          place: {
+            placeId: placeIdFromName(h.name),
+            placeName: h.name,
+            address: h.address,
+            lat: h.lat as number,
+            lng: h.lng as number,
+          },
+        }));
+      const rows = [...mine, ...theirs].sort((a, b) => a.distanceM - b.distanceM);
+
+      if (rows.length === 0) {
+        choose(address);
+        return;
+      }
+      setQuery('');
+      setHere({ rows, fromGoogle: theirs.length > 0, address });
     } catch {
       showToast(t('places.locationFailed'));
     } finally {
@@ -239,6 +308,39 @@ export function PlacePicker({
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         style={s.list}>
+        {here && !query.trim() ? (
+          <>
+            <Txt variant="label" tone="faint" style={s.groupLabel}>
+              {t('places.nearby')}
+            </Txt>
+            <View style={s.group}>
+              {here.rows.map((r) => (
+                <View key={r.key}>
+                  <Row
+                    title={r.place.placeName}
+                    subtitle={[t('places.metresAway', { m: r.distanceM }), r.place.address]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    onPress={() => choose(r.place)}
+                  />
+                  <Divider inset={spacing.lg + 32} />
+                </View>
+              ))}
+              <Row
+                icon="locate"
+                title={t('places.useAddress')}
+                subtitle={here.address.address ?? here.address.placeName}
+                onPress={() => choose(here.address)}
+              />
+            </View>
+            {here.fromGoogle ? (
+              <Txt variant="caption" tone="faint" style={s.attribution}>
+                {t('places.poweredByGoogle')}
+              </Txt>
+            ) : null}
+          </>
+        ) : null}
+
         {previousMatches.length > 0 ? (
           <>
             <Txt variant="label" tone="faint" style={s.groupLabel}>
@@ -316,10 +418,13 @@ function Row({
   title,
   subtitle,
   busy,
+  icon = 'pin',
   onPress,
 }: {
   title: string;
   subtitle?: string;
+  /** `locate` marks the "use this address" row apart from the cafés above it. */
+  icon?: 'pin' | 'locate';
   /** The chosen Google suggestion, while its coordinates are being fetched. */
   busy?: boolean;
   onPress: () => void;
@@ -333,6 +438,8 @@ function Row({
       style={({ pressed }) => [s.row, pressed && s.pressed]}>
       {busy ? (
         <ActivityIndicator size="small" color={colors.primary} />
+      ) : icon === 'locate' ? (
+        <CrosshairIcon size={18} color={colors.inkFaint} />
       ) : (
         <PinIcon size={18} color={colors.inkFaint} />
       )}
